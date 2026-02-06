@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block title %}Confirm Sign-In - Octagon Woodshop Log{% endblock %}
+
+{% block content %}
+<h2>Confirm Student Sign-In</h2>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card mb-3">
+            <div class="card-header">
+                {{ student.display_name }}
+                <small class="text-muted">({{ student.student_id }})</small>
+                &rarr; {{ area.name }}
+            </div>
+            <div class="card-body">
+
+                {# --- Ban check --- #}
+                {% if student.is_banned %}
+                <div class="strike-banner">
+                    <strong>CANNOT SIGN IN</strong> &mdash;
+                    This student has {{ student.active_warnings_count }} active strike(s)
+                    (3 or more = banned).
+                </div>
+                <a href="{{ url_for('monitor.dashboard') }}" class="btn btn-secondary">
+                    Back to Dashboard
+                </a>
+
+                {% else %}
+
+                {# --- Care note (monitor-only) --- #}
+                {% if student.care_note %}
+                <div class="care-note-banner">
+                    <strong>Monitor Note:</strong> {{ student.care_note }}
+                </div>
+                {% endif %}
+
+                {# --- Warning count --- #}
+                {% set wcount = student.active_warnings_count %}
+                {% if wcount > 0 %}
+                <div class="alert alert-warning">
+                    This student has <strong>{{ wcount }}</strong> active warning(s).
+                </div>
+                {% endif %}
+
+                {# --- Equipment training status --- #}
+                {% if equipment_status %}
+                <h5>Equipment Training for {{ area.name }}</h5>
+                <table class="table table-sm">
+                    <thead><tr><th>Equipment</th><th>Status</th></tr></thead>
+                    <tbody>
+                        {% for item in equipment_status %}
+                        <tr>
+                            <td>{{ item.equipment.name }}</td>
+                            <td>
+                                {% if item.trained %}
+                                <span class="badge bg-success">Trained</span>
+                                {% else %}
+                                <span class="badge bg-danger">NOT Trained</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% endif %}
+
+                {# --- Acknowledge & sign in --- #}
+                <form method="POST" action="{{ url_for('student.sign_in') }}">
+                    <input type="hidden" name="student_id" value="{{ student.id }}">
+                    <input type="hidden" name="area_id" value="{{ area.id }}">
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-success">
+                            Acknowledge &amp; Sign In
+                        </button>
+                        <a href="{{ url_for('monitor.dashboard') }}" class="btn btn-outline-secondary">
+                            Cancel
+                        </a>
+                    </div>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

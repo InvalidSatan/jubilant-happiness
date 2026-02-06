@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Add Monitor - Octagon Woodshop Log{% endblock %}
+
+{% block content %}
+<h2>Add Monitor</h2>
+
+<div class="row">
+    <div class="col-md-6">
+        <form method="POST">
+            <div class="mb-3">
+                <label class="form-label">Username</label>
+                <input type="text" name="username" class="form-control" required>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Display Name</label>
+                <input type="text" name="display_name" class="form-control" required>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Password</label>
+                <input type="password" name="password" class="form-control" required>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Authorized Areas</label>
+                {% for area in areas %}
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox"
+                           name="area_ids" value="{{ area.id }}" id="area_{{ area.id }}">
+                    <label class="form-check-label" for="area_{{ area.id }}">
+                        {{ area.name }}
+                    </label>
+                </div>
+                {% endfor %}
+            </div>
+            <div class="mb-3 form-check">
+                <input class="form-check-input" type="checkbox" name="is_admin" id="is_admin">
+                <label class="form-check-label" for="is_admin">Admin privileges</label>
+            </div>
+            <button type="submit" class="btn btn-primary">Create Monitor</button>
+            <a href="{{ url_for('admin.index') }}" class="btn btn-outline-secondary">Cancel</a>
+        </form>
+    </div>
+</div>
+{% endblock %}

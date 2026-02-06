@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}Admin - Octagon Woodshop Log{% endblock %}
+
+{% block content %}
+<h2>Admin Panel</h2>
+
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h3>{{ monitors | length }}</h3>
+                <p class="mb-0">Monitors</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h3>{{ students_count }}</h3>
+                <p class="mb-0">Registered Students</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h3>{{ active_monitor_sessions }}</h3>
+                <p class="mb-0">Monitors On Duty</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h3>{{ active_student_visits }}</h3>
+                <p class="mb-0">Students Signed In</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# --- Monitors --- #}
+<div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span>Monitors</span>
+        <a href="{{ url_for('admin.add_monitor') }}" class="btn btn-primary btn-sm">
+            Add Monitor
+        </a>
+    </div>
+    <table class="table table-hover mb-0">
+        <thead>
+            <tr><th>Name</th><th>Username</th><th>Areas</th><th>Admin</th><th></th></tr>
+        </thead>
+        <tbody>
+            {% for m in monitors %}
+            <tr>
+                <td>{{ m.display_name }}</td>
+                <td>{{ m.username }}</td>
+                <td>
+                    {% for a in m.areas %}
+                    <span class="badge bg-secondary area-badge">{{ a.name }}</span>
+                    {% endfor %}
+                </td>
+                <td>{{ "Yes" if m.is_admin else "" }}</td>
+                <td>
+                    <a href="{{ url_for('admin.edit_monitor', monitor_id=m.id) }}"
+                       class="btn btn-outline-secondary btn-sm">Edit</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+{# --- Quick links --- #}
+<div class="row">
+    <div class="col-md-4">
+        <a href="{{ url_for('admin.equipment') }}" class="btn btn-outline-primary w-100 mb-2">
+            Manage Equipment
+        </a>
+    </div>
+    <div class="col-md-4">
+        <a href="{{ url_for('admin.warnings') }}" class="btn btn-outline-warning w-100 mb-2">
+            View All Warnings
+        </a>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Session History - Octagon Woodshop Log{% endblock %}
+
+{% block content %}
+<h2>My Session History</h2>
+
+<table class="table">
+    <thead>
+        <tr><th>Area</th><th>Signed In</th><th>Signed Out</th><th>Duration</th></tr>
+    </thead>
+    <tbody>
+        {% for s in sessions %}
+        <tr>
+            <td>{{ s.area.name }}</td>
+            <td>{{ s.signed_in_at.strftime('%Y-%m-%d %I:%M %p') }}</td>
+            <td>
+                {% if s.signed_out_at %}
+                    {{ s.signed_out_at.strftime('%Y-%m-%d %I:%M %p') }}
+                {% else %}
+                    <span class="badge bg-success">Active</span>
+                {% endif %}
+            </td>
+            <td>
+                {% if s.signed_out_at %}
+                    {{ ((s.signed_out_at - s.signed_in_at).total_seconds() / 3600) | round(1) }} hrs
+                {% else %}
+                    &mdash;
+                {% endif %}
+            </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="4" class="text-muted">No sessions recorded.</td></tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

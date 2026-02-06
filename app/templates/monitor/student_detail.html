@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+{% block title %}{{ student.display_name }} - Octagon Woodshop Log{% endblock %}
+
+{% block content %}
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{{ url_for('monitor.dashboard') }}">Dashboard</a></li>
+        <li class="breadcrumb-item active">{{ student.display_name }}</li>
+    </ol>
+</nav>
+
+<h2>{{ student.display_name }} <small class="text-muted">({{ student.student_id }})</small></h2>
+
+{% if student.is_banned %}
+<div class="strike-banner">
+    <strong>BANNED</strong> &mdash; This student has 3 or more active strikes and cannot sign in.
+</div>
+{% endif %}
+
+{% if student.care_note %}
+<div class="care-note-banner">
+    <strong>Monitor Note:</strong> {{ student.care_note }}
+</div>
+{% endif %}
+
+<div class="row">
+    {# --- Training / Certifications --- #}
+    <div class="col-md-6 mb-4">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span>Training &amp; Certifications</span>
+                <form method="POST"
+                      action="{{ url_for('integration.sync_student', student_id=student.id) }}">
+                    <button type="submit" class="btn btn-outline-secondary btn-sm"
+                            title="Pull latest data from Banner / ASULearn">
+                        Sync External
+                    </button>
+                </form>
+            </div>
+            <ul class="list-group list-group-flush">
+                {% for eq in student.trained_equipment %}
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    {{ eq.name }} <span class="badge bg-success">Trained</span>
+                </li>
+                {% else %}
+                <li class="list-group-item text-muted">No training records.</li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+
+    {# --- Warnings / Strikes --- #}
+    <div class="col-md-6 mb-4">
+        <div class="card">
+            <div class="card-header">
+                Warnings &amp; Strikes ({{ student.active_warnings_count }} active)
+            </div>
+            <ul class="list-group list-group-flush">
+                {% for w in warnings %}
+                <li class="list-group-item">
+                    <div class="d-flex justify-content-between">
+                        <strong>{{ w.area.name }}</strong>
+                        {% if w.resolved %}
+                        <span class="badge bg-secondary">Resolved</span>
+                        {% else %}
+                        <span class="badge bg-danger">Active</span>
+                        {% endif %}
+                    </div>
+                    <small class="text-muted">
+                        {{ w.created_at.strftime('%Y-%m-%d %I:%M %p') }}
+                        &mdash; by {{ w.issued_by.display_name }}
+                    </small>
+                    <p class="mb-0 mt-1">{{ w.reason }}</p>
+                </li>
+                {% else %}
+                <li class="list-group-item text-muted">No warnings.</li>
+                {% endfor %}
+            </ul>
+        </div>
+
+        {# Issue a new warning #}
+        <div class="card mt-3">
+            <div class="card-header">Issue a Warning</div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('admin.issue_warning') }}">
+                    <input type="hidden" name="student_id" value="{{ student.id }}">
+                    <div class="mb-3">
+                        <label class="form-label">Area</label>
+                        <select name="area_id" class="form-select" required>
+                            {% for area in student.visits | map(attribute='area') | unique %}
+                            <option value="{{ area.id }}">{{ area.name }}</option>
+                            {% endfor %}
+                            {# Fallback: show all areas #}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Reason</label>
+                        <textarea name="reason" class="form-control" rows="2" required></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-warning btn-sm">Issue Warning</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# --- Care Note (monitor-only) --- #}
+<div class="card mb-4">
+    <div class="card-header">Private Care Note (visible to monitors only)</div>
+    <div class="card-body">
+        <form method="POST"
+              action="{{ url_for('monitor.update_care_note', student_id=student.id) }}">
+            <div class="mb-3">
+                <textarea name="care_note" class="form-control" rows="3"
+                          placeholder="Notes about this student that other monitors should be aware of...">{{ student.care_note or '' }}</textarea>
+            </div>
+            <button type="submit" class="btn btn-outline-primary btn-sm">Save Note</button>
+        </form>
+    </div>
+</div>
+
+{# --- Recent Visits --- #}
+<div class="card mb-4">
+    <div class="card-header">Recent Visits</div>
+    <table class="table table-sm mb-0">
+        <thead>
+            <tr><th>Area</th><th>Signed In</th><th>Signed Out</th><th>Monitor</th></tr>
+        </thead>
+        <tbody>
+            {% for v in visits %}
+            <tr>
+                <td>{{ v.area.name }}</td>
+                <td>{{ v.signed_in_at.strftime('%Y-%m-%d %I:%M %p') }}</td>
+                <td>{{ v.signed_out_at.strftime('%Y-%m-%d %I:%M %p') if v.signed_out_at else 'Active' }}</td>
+                <td>{{ v.acknowledged_by.display_name }}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="4" class="text-muted">No visits recorded.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

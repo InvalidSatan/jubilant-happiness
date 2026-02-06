@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}Equipment - Octagon Woodshop Log{% endblock %}
+
+{% block content %}
+<h2>Equipment Management</h2>
+
+<div class="row">
+    {# --- Add new equipment --- #}
+    <div class="col-md-4 mb-4">
+        <div class="card">
+            <div class="card-header">Add Equipment</div>
+            <div class="card-body">
+                <form method="POST">
+                    <div class="mb-3">
+                        <label class="form-label">Name</label>
+                        <input type="text" name="name" class="form-control" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Area</label>
+                        <select name="area_id" class="form-select" required>
+                            {% for area in areas %}
+                            <option value="{{ area.id }}">{{ area.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3 form-check">
+                        <input class="form-check-input" type="checkbox"
+                               name="requires_training" id="req_training" checked>
+                        <label class="form-check-label" for="req_training">
+                            Requires training
+                        </label>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-sm">Add</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    {# --- Existing equipment list --- #}
+    <div class="col-md-8 mb-4">
+        <div class="card">
+            <div class="card-header">All Equipment</div>
+            <table class="table table-sm mb-0">
+                <thead>
+                    <tr><th>Name</th><th>Area</th><th>Training Required</th></tr>
+                </thead>
+                <tbody>
+                    {% for eq in all_equipment %}
+                    <tr>
+                        <td>{{ eq.name }}</td>
+                        <td><span class="badge bg-secondary">{{ eq.area.name }}</span></td>
+                        <td>{{ "Yes" if eq.requires_training else "No" }}</td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="3" class="text-muted">No equipment added yet.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% block title %}Dashboard - Octagon Woodshop Log{% endblock %}
+
+{% block content %}
+<h2>Monitor Dashboard</h2>
+
+{# --- Active area session --- #}
+{% if active_session %}
+<div class="card mb-4 border-success">
+    <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
+        <span>
+            On Duty: <strong>{{ active_session.area.name }}</strong>
+            &mdash; since {{ active_session.signed_in_at.strftime('%I:%M %p') }}
+        </span>
+        <form method="POST" action="{{ url_for('monitor.sign_out') }}">
+            <button class="btn btn-outline-light btn-sm" type="submit">End Shift</button>
+        </form>
+    </div>
+    <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h5 class="mb-0">Students Currently Signed In</h5>
+            <a href="{{ url_for('student.lookup') }}" class="btn btn-primary btn-sm">
+                Sign In a Student
+            </a>
+        </div>
+
+        {% if active_visitors %}
+        <table class="table table-hover">
+            <thead>
+                <tr>
+                    <th>Student</th>
+                    <th>ID</th>
+                    <th>Signed In</th>
+                    <th>Warnings</th>
+                    <th>Note</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for visit in active_visitors %}
+                <tr>
+                    <td>
+                        <a href="{{ url_for('monitor.student_detail', student_id=visit.student.id) }}">
+                            {{ visit.student.display_name }}
+                        </a>
+                    </td>
+                    <td>{{ visit.student.student_id }}</td>
+                    <td>{{ visit.signed_in_at.strftime('%I:%M %p') }}</td>
+                    <td>
+                        {% set wcount = visit.student.active_warnings_count %}
+                        {% if wcount > 0 %}
+                        <span class="badge bg-warning text-dark">{{ wcount }} strike{{ 's' if wcount != 1 }}</span>
+                        {% else %}
+                        <span class="text-muted">0</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if visit.student.care_note %}
+                        <span class="badge bg-info" title="{{ visit.student.care_note }}">
+                            Needs attention
+                        </span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <form method="POST"
+                              action="{{ url_for('student.sign_out', visit_id=visit.id) }}">
+                            <button class="btn btn-outline-secondary btn-sm" type="submit">
+                                Sign Out
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="text-muted">No students currently signed in.</p>
+        {% endif %}
+    </div>
+</div>
+
+{% else %}
+{# --- Not on duty yet --- #}
+<div class="card mb-4">
+    <div class="card-header">Select an Area to Begin Your Shift</div>
+    <div class="card-body">
+        {% if current_user.areas %}
+        <div class="row g-3">
+            {% for area in current_user.areas %}
+            <div class="col-md-3">
+                <form method="POST" action="{{ url_for('monitor.sign_in') }}">
+                    <input type="hidden" name="area_id" value="{{ area.id }}">
+                    <button type="submit" class="btn btn-outline-primary w-100 py-3">
+                        {{ area.name }}
+                    </button>
+                </form>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="text-muted">
+            You are not assigned to any areas yet. Ask an admin to assign you.
+        </p>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+{% endblock %}

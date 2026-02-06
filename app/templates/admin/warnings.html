@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Warnings - Octagon Woodshop Log{% endblock %}
+
+{% block content %}
+<h2>All Warnings</h2>
+
+<table class="table">
+    <thead>
+        <tr>
+            <th>Student</th>
+            <th>Area</th>
+            <th>Reason</th>
+            <th>Issued By</th>
+            <th>Date</th>
+            <th>Status</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for w in warnings %}
+        <tr>
+            <td>
+                <a href="{{ url_for('monitor.student_detail', student_id=w.student.id) }}">
+                    {{ w.student.display_name }}
+                </a>
+            </td>
+            <td>{{ w.area.name }}</td>
+            <td>{{ w.reason }}</td>
+            <td>{{ w.issued_by.display_name }}</td>
+            <td>{{ w.created_at.strftime('%Y-%m-%d %I:%M %p') }}</td>
+            <td>
+                {% if w.resolved %}
+                <span class="badge bg-secondary">Resolved</span>
+                {% else %}
+                <span class="badge bg-danger">Active</span>
+                {% endif %}
+            </td>
+            <td>
+                {% if not w.resolved and current_user.is_admin %}
+                <form method="POST"
+                      action="{{ url_for('admin.resolve_warning', warning_id=w.id) }}">
+                    <button type="submit" class="btn btn-outline-success btn-sm">Resolve</button>
+                </form>
+                {% endif %}
+            </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" class="text-muted">No warnings recorded.</td></tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}
