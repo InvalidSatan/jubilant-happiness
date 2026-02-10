@@ -25,6 +25,7 @@ student_training = db.Table(
         "equipment_id", db.Integer, db.ForeignKey("equipment.id"), primary_key=True
     ),
     db.Column("certified_date", db.DateTime, default=lambda: datetime.now(timezone.utc)),
+    db.Column("certified_semester", db.String(32), nullable=True),  # e.g. "Fall 2024"
     db.Column("source", db.String(50), default="manual"),  # manual | banner | asulearn
 )
 

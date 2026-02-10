@@ -10,6 +10,8 @@ from app.models import (
     StudentVisit,
     Student,
     Warning,
+    student_training,
+    Equipment,
 )
 
 monitor_bp = Blueprint("monitor", __name__)
@@ -118,11 +120,28 @@ def student_detail(student_id):
         .limit(20)
         .all()
     )
+
+    # Build training records with semester info
+    training_records = (
+        db.session.query(
+            Equipment.name,
+            Equipment.id,
+            ShopArea.name.label("area_name"),
+            student_training.c.certified_semester,
+        )
+        .join(Equipment, student_training.c.equipment_id == Equipment.id)
+        .join(ShopArea, Equipment.area_id == ShopArea.id)
+        .filter(student_training.c.student_id == student.id)
+        .order_by(ShopArea.name, Equipment.name)
+        .all()
+    )
+
     return render_template(
         "monitor/student_detail.html",
         student=student,
         warnings=warnings,
         visits=visits,
+        training_records=training_records,
     )
 
 

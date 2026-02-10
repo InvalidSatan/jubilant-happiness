@@ -10,6 +10,7 @@ from app.models import (
     MonitorSession,
     ShopArea,
     Equipment,
+    student_training,
 )
 
 student_bp = Blueprint("student", __name__)
@@ -97,10 +98,22 @@ def confirm_sign_in(student_id, area_id):
         area_id=area.id, requires_training=True
     ).all()
 
-    # Which of those the student is trained on
-    trained_ids = {e.id for e in student.trained_equipment}
+    # Query training records for this student to get semester info
+    training_rows = db.session.query(
+        student_training.c.equipment_id,
+        student_training.c.certified_semester,
+    ).filter(
+        student_training.c.student_id == student.id,
+    ).all()
+    training_map = {row.equipment_id: row.certified_semester for row in training_rows}
+
     equipment_status = [
-        {"equipment": eq, "trained": eq.id in trained_ids} for eq in area_equipment
+        {
+            "equipment": eq,
+            "trained": eq.id in training_map,
+            "semester": training_map.get(eq.id),
+        }
+        for eq in area_equipment
     ]
 
     return render_template(

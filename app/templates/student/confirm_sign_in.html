@@ -44,18 +44,33 @@
 
                 {# --- Equipment training status --- #}
                 {% if equipment_status %}
-                <h5>Equipment Training for {{ area.name }}</h5>
-                <table class="table table-sm">
-                    <thead><tr><th>Equipment</th><th>Status</th></tr></thead>
+                <h5 class="mb-3">Training Certifications for {{ area.name }}</h5>
+                <table class="table table-sm table-hover align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Certification</th>
+                            <th>Status</th>
+                            <th>Completed</th>
+                        </tr>
+                    </thead>
                     <tbody>
                         {% for item in equipment_status %}
                         <tr>
-                            <td>{{ item.equipment.name }}</td>
+                            <td class="fw-medium">{{ item.equipment.name }}</td>
                             <td>
                                 {% if item.trained %}
-                                <span class="badge bg-success">Trained</span>
+                                <span class="badge bg-success">Certified</span>
                                 {% else %}
-                                <span class="badge bg-danger">NOT Trained</span>
+                                <span class="badge bg-danger">NOT Certified</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if item.trained and item.semester %}
+                                <span class="text-success">{{ item.semester }}</span>
+                                {% elif item.trained %}
+                                <span class="text-muted">On file</span>
+                                {% else %}
+                                <span class="text-muted">&mdash;</span>
                                 {% endif %}
                             </td>
                         </tr>

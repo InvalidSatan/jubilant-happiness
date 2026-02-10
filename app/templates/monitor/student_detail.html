@@ -37,15 +37,34 @@
                     </button>
                 </form>
             </div>
-            <ul class="list-group list-group-flush">
-                {% for eq in student.trained_equipment %}
-                <li class="list-group-item d-flex justify-content-between align-items-center">
-                    {{ eq.name }} <span class="badge bg-success">Trained</span>
-                </li>
-                {% else %}
-                <li class="list-group-item text-muted">No training records.</li>
-                {% endfor %}
-            </ul>
+            {% if training_records %}
+            <table class="table table-sm table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Certification</th>
+                        <th>Area</th>
+                        <th>Completed</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for rec in training_records %}
+                    <tr>
+                        <td class="fw-medium">{{ rec.name }}</td>
+                        <td><span class="text-muted">{{ rec.area_name }}</span></td>
+                        <td>
+                            {% if rec.certified_semester %}
+                            <span class="badge bg-success">{{ rec.certified_semester }}</span>
+                            {% else %}
+                            <span class="badge bg-success">On file</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <div class="card-body text-muted">No training records.</div>
+            {% endif %}
         </div>
     </div>
 
