@@ -196,3 +196,63 @@ class TestWarnings:
 
         s = db.session.get(Student, student_id)
         assert s.is_banned is True
+
+
+class TestKiosk:
+    def test_kiosk_requires_active_session(self, client, seed):
+        login(client, "testmon", "pass")
+        resp = client.get("/kiosk/", follow_redirects=True)
+        # Should redirect to dashboard since no active session
+        assert b"Dashboard" in resp.data
+
+    def test_kiosk_sign_in_via_scan(self, client, seed):
+        login(client, "testmon", "pass")
+        client.post("/monitor/sign-in", data={"area_id": seed["area_id"]})
+
+        resp = client.post(
+            "/kiosk/scan",
+            data={"banner_id": seed["student_banner_id"]},
+        )
+        assert resp.status_code == 200
+        assert b"signed in" in resp.data
+
+    def test_kiosk_auto_sign_out(self, client, seed):
+        login(client, "testmon", "pass")
+        client.post("/monitor/sign-in", data={"area_id": seed["area_id"]})
+
+        # First scan — sign in
+        client.post("/kiosk/scan", data={"banner_id": seed["student_banner_id"]})
+        # Second scan — should auto sign out
+        resp = client.post(
+            "/kiosk/scan",
+            data={"banner_id": seed["student_banner_id"]},
+        )
+        assert b"signed out" in resp.data
+
+    def test_kiosk_unknown_student(self, client, seed):
+        login(client, "testmon", "pass")
+        client.post("/monitor/sign-in", data={"area_id": seed["area_id"]})
+
+        resp = client.post("/kiosk/scan", data={"banner_id": "999999999"})
+        assert b"not found" in resp.data
+
+    def test_kiosk_banned_student(self, client, seed):
+        login(client, "testmon", "pass")
+        client.post("/monitor/sign-in", data={"area_id": seed["area_id"]})
+
+        # Issue 3 warnings
+        for i in range(3):
+            w = Warning(
+                student_id=seed["student_id"],
+                area_id=seed["area_id"],
+                issued_by_id=seed["monitor_id"],
+                reason=f"Strike {i + 1}",
+            )
+            db.session.add(w)
+        db.session.commit()
+
+        resp = client.post(
+            "/kiosk/scan",
+            data={"banner_id": seed["student_banner_id"]},
+        )
+        assert b"banned" in resp.data

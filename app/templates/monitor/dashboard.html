@@ -19,9 +19,14 @@
     <div class="card-body">
         <div class="d-flex justify-content-between align-items-center mb-3">
             <h5 class="mb-0">Students Currently Signed In</h5>
-            <a href="{{ url_for('student.lookup') }}" class="btn btn-primary btn-sm">
-                Sign In a Student
-            </a>
+            <div class="d-flex gap-2">
+                <a href="{{ url_for('kiosk.index') }}" class="btn btn-outline-dark btn-sm">
+                    Launch Kiosk
+                </a>
+                <a href="{{ url_for('student.lookup') }}" class="btn btn-primary btn-sm">
+                    Sign In a Student
+                </a>
+            </div>
         </div>
 
         {% if active_visitors %}

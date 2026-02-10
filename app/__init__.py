@@ -30,12 +30,14 @@ def create_app(config_class=None):
     from app.routes.student import student_bp
     from app.routes.admin import admin_bp
     from app.routes.integration import integration_bp
+    from app.routes.kiosk import kiosk_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(monitor_bp, url_prefix="/monitor")
     app.register_blueprint(student_bp, url_prefix="/student")
     app.register_blueprint(admin_bp, url_prefix="/admin")
     app.register_blueprint(integration_bp, url_prefix="/integration")
+    app.register_blueprint(kiosk_bp, url_prefix="/kiosk")
 
     with app.app_context():
         db.create_all()
