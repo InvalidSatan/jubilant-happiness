@@ -43,23 +43,34 @@ with app.app_context():
             db.session.add(m)
             print(f"Created monitor: {uname} (password: password)")
 
-    # --- Create sample equipment ---
+    # --- Create equipment / training certifications ---
+    # These match the actual certification categories used in the shop spreadsheets.
+    # Ceramics certifications are placeholders until details are confirmed.
     equipment_data = [
-        ("Band Saw", sculpture, True),
-        ("Table Saw", sculpture, True),
-        ("Wood Lathe", sculpture, True),
-        ("Hand Tools", sculpture, False),
+        # Sculpture
+        ("Basic Woodshop", sculpture, True),
+        ("Advanced Woodshop", sculpture, True),
+        ("Welding", sculpture, True),
+        ("Casting", sculpture, True),
+        ("Carving", sculpture, True),
+        ("CNC Plasma", sculpture, True),
+        # Ceramics (TBD — placeholders)
         ("Kiln", ceramics, True),
         ("Pottery Wheel", ceramics, True),
         ("Glaze Station", ceramics, False),
-        ("MIG Welder", metal, True),
-        ("TIG Welder", metal, True),
-        ("Plasma Cutter", metal, True),
-        ("Anvil & Forge", metal, True),
-        ("3D Printer", digilab, True),
-        ("Laser Cutter", digilab, True),
-        ("CNC Router", digilab, True),
-        ("Vinyl Cutter", digilab, False),
+        # Metals
+        ("Torches (Annealing/Soldering Bench)", metal, True),
+        ("Machine Room (Buffer/Grinder)", metal, True),
+        ("Casting Room", metal, True),
+        ("CNC Milling Machine", metal, True),
+        ("Annodizing", metal, True),
+        # DigiLab
+        ("Laser", digilab, True),
+        ("3D Printing", digilab, True),
+        ("Resin Printing", digilab, True),
+        ("Shopbot", digilab, True),
+        ("Vinyl Cutter", digilab, True),
+        # Woodworking
         ("WW1", woodworking, True),
         ("WW2", woodworking, True),
         ("Welding", woodworking, True),
