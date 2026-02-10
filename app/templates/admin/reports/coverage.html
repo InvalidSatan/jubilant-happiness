@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% block title %}Monitor Coverage - Octagon Woodshop Log{% endblock %}
+
+{% block content %}
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{{ url_for('admin.index') }}">Admin</a></li>
+        <li class="breadcrumb-item"><a href="{{ url_for('reports.hub') }}">Reports</a></li>
+        <li class="breadcrumb-item active">Monitor Coverage</li>
+    </ol>
+</nav>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2 class="mb-0">Monitor Coverage</h2>
+    <a href="{{ url_for('reports.coverage_export', area_id=selected_area, start=start, end=end) }}"
+       class="btn btn-outline-secondary btn-sm">
+        Export CSV
+    </a>
+</div>
+
+{# --- Filters --- #}
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="GET" class="row g-3 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label">Area</label>
+                <select name="area_id" class="form-select">
+                    <option value="">All Areas</option>
+                    {% for area in areas %}
+                    <option value="{{ area.id }}" {{ 'selected' if selected_area == area.id }}>
+                        {{ area.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">From</label>
+                <input type="date" name="start" class="form-control" value="{{ start }}">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">To</label>
+                <input type="date" name="end" class="form-control" value="{{ end }}">
+            </div>
+            <div class="col-md-3">
+                <button type="submit" class="btn btn-success w-100">Filter</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{# --- Hours summary --- #}
+{% if monitor_hours %}
+<div class="card mb-4">
+    <div class="card-header">Hours Summary</div>
+    <div class="card-body">
+        <div class="row g-3">
+            {% for name, hours in monitor_hours.items() %}
+            <div class="col-md-3">
+                <div class="border rounded p-3 text-center">
+                    <div class="fw-bold">{{ name }}</div>
+                    <div class="fs-4 text-success">{{ "%.1f"|format(hours) }} hrs</div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{# --- Session log --- #}
+<div class="card">
+    <div class="card-header">
+        {{ sessions | length }} session{{ 's' if sessions | length != 1 }} found
+    </div>
+    {% if sessions %}
+    <div class="table-responsive">
+        <table class="table table-sm table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Monitor</th>
+                    <th>Area</th>
+                    <th>Signed In</th>
+                    <th>Signed Out</th>
+                    <th>Duration</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for s in sessions %}
+                <tr>
+                    <td>{{ s.monitor.display_name }}</td>
+                    <td><span class="badge bg-secondary">{{ s.area.name }}</span></td>
+                    <td>{{ s.signed_in_at.strftime('%Y-%m-%d %I:%M %p') }}</td>
+                    <td>
+                        {% if s.signed_out_at %}
+                        {{ s.signed_out_at.strftime('%Y-%m-%d %I:%M %p') }}
+                        {% else %}
+                        <span class="badge bg-success">Active</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if s.signed_out_at %}
+                        {% set delta = (s.signed_out_at - s.signed_in_at).total_seconds() %}
+                        {{ "%.1f"|format(delta / 3600) }} hrs
+                        {% else %}
+                        <span class="text-muted">—</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="card-body text-muted">No sessions match the selected filters.</div>
+    {% endif %}
+</div>
+{% endblock %}

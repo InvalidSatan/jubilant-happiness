@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block title %}Visit Log - Octagon Woodshop Log{% endblock %}
+
+{% block content %}
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{{ url_for('admin.index') }}">Admin</a></li>
+        <li class="breadcrumb-item"><a href="{{ url_for('reports.hub') }}">Reports</a></li>
+        <li class="breadcrumb-item active">Visit Log</li>
+    </ol>
+</nav>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2 class="mb-0">Visit Log</h2>
+    <a href="{{ url_for('reports.visits_export', area_id=selected_area, start=start, end=end) }}"
+       class="btn btn-outline-secondary btn-sm">
+        Export CSV
+    </a>
+</div>
+
+{# --- Filters --- #}
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="GET" class="row g-3 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label">Area</label>
+                <select name="area_id" class="form-select">
+                    <option value="">All Areas</option>
+                    {% for area in areas %}
+                    <option value="{{ area.id }}" {{ 'selected' if selected_area == area.id }}>
+                        {{ area.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">From</label>
+                <input type="date" name="start" class="form-control" value="{{ start }}">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">To</label>
+                <input type="date" name="end" class="form-control" value="{{ end }}">
+            </div>
+            <div class="col-md-3">
+                <button type="submit" class="btn btn-primary w-100">Filter</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{# --- Results --- #}
+<div class="card">
+    <div class="card-header">
+        {{ visits | length }} visit{{ 's' if visits | length != 1 }} found
+    </div>
+    {% if visits %}
+    <div class="table-responsive">
+        <table class="table table-sm table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Student</th>
+                    <th>Banner ID</th>
+                    <th>Area</th>
+                    <th>Signed In</th>
+                    <th>Signed Out</th>
+                    <th>In By</th>
+                    <th>Out By</th>
+                    <th>Note</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for v in visits %}
+                <tr>
+                    <td>
+                        <a href="{{ url_for('monitor.student_detail', student_id=v.student.id) }}">
+                            {{ v.student.display_name }}
+                        </a>
+                    </td>
+                    <td><code>{{ v.student.student_id }}</code></td>
+                    <td><span class="badge bg-secondary">{{ v.area.name }}</span></td>
+                    <td>{{ v.signed_in_at.strftime('%Y-%m-%d %I:%M %p') }}</td>
+                    <td>
+                        {% if v.signed_out_at %}
+                        {{ v.signed_out_at.strftime('%Y-%m-%d %I:%M %p') }}
+                        {% else %}
+                        <span class="badge bg-success">Active</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ v.acknowledged_by.display_name }}</td>
+                    <td>{{ v.signed_out_by.display_name if v.signed_out_by else '—' }}</td>
+                    <td>
+                        {% if v.note %}
+                        <small title="{{ v.note }}">{{ v.note|truncate(25) }}</small>
+                        {% else %}
+                        <span class="text-muted">—</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="card-body text-muted">No visits match the selected filters.</div>
+    {% endif %}
+</div>
+{% endblock %}
