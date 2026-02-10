@@ -71,30 +71,48 @@
     {# --- Warnings / Strikes --- #}
     <div class="col-md-6 mb-4">
         <div class="card">
-            <div class="card-header">
-                Warnings &amp; Strikes ({{ student.active_warnings_count }} active)
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span>Warnings &amp; Strikes</span>
+                {% set wcount = student.active_warnings_count %}
+                <span class="strike-indicators">
+                    <span class="strike-dot {{ 'strike-1' if wcount >= 1 else 'empty' }}">1st</span>
+                    <span class="strike-dot {{ 'strike-2' if wcount >= 2 else 'empty' }}">2nd</span>
+                    <span class="strike-dot {{ 'strike-3' if wcount >= 3 else 'empty' }}">3rd</span>
+                </span>
             </div>
-            <ul class="list-group list-group-flush">
-                {% for w in warnings %}
-                <li class="list-group-item">
-                    <div class="d-flex justify-content-between">
-                        <strong>{{ w.area.name }}</strong>
-                        {% if w.resolved %}
-                        <span class="badge bg-secondary">Resolved</span>
-                        {% else %}
-                        <span class="badge bg-danger">Active</span>
-                        {% endif %}
-                    </div>
-                    <small class="text-muted">
-                        {{ w.created_at.strftime('%Y-%m-%d %I:%M %p') }}
-                        &mdash; by {{ w.issued_by.display_name }}
-                    </small>
-                    <p class="mb-0 mt-1">{{ w.reason }}</p>
-                </li>
-                {% else %}
-                <li class="list-group-item text-muted">No warnings.</li>
-                {% endfor %}
-            </ul>
+            {% if warnings %}
+            <table class="table table-sm table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Area</th>
+                        <th>Reason</th>
+                        <th>Issued</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for w in warnings %}
+                    <tr class="{{ 'table-warning' if not w.resolved else '' }}">
+                        <td>{{ w.area.name }}</td>
+                        <td>
+                            <span class="d-block">{{ w.reason }}</span>
+                            <small class="text-muted">by {{ w.issued_by.display_name }}</small>
+                        </td>
+                        <td><small>{{ w.created_at.strftime('%Y-%m-%d') }}</small></td>
+                        <td>
+                            {% if w.resolved %}
+                            <span class="badge bg-secondary">Resolved</span>
+                            {% else %}
+                            <span class="badge bg-danger">Active</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <div class="card-body text-muted">No warnings.</div>
+            {% endif %}
         </div>
 
         {# Issue a new warning #}

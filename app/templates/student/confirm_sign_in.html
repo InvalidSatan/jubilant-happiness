@@ -34,11 +34,16 @@
                 </div>
                 {% endif %}
 
-                {# --- Warning count --- #}
+                {# --- Strike indicators --- #}
                 {% set wcount = student.active_warnings_count %}
                 {% if wcount > 0 %}
-                <div class="alert alert-warning">
-                    This student has <strong>{{ wcount }}</strong> active warning(s).
+                <div class="alert alert-{{ 'danger' if wcount >= 3 else 'warning' }} d-flex align-items-center gap-3">
+                    <span class="strike-indicators">
+                        <span class="strike-dot {{ 'strike-1' if wcount >= 1 else 'empty' }}">1st</span>
+                        <span class="strike-dot {{ 'strike-2' if wcount >= 2 else 'empty' }}">2nd</span>
+                        <span class="strike-dot {{ 'strike-3' if wcount >= 3 else 'empty' }}">3rd</span>
+                    </span>
+                    <span>This student has <strong>{{ wcount }}</strong> active warning{{ 's' if wcount != 1 }}.</span>
                 </div>
                 {% endif %}
 

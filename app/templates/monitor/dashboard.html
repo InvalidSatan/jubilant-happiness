@@ -48,11 +48,11 @@
                     <td>{{ visit.signed_in_at.strftime('%I:%M %p') }}</td>
                     <td>
                         {% set wcount = visit.student.active_warnings_count %}
-                        {% if wcount > 0 %}
-                        <span class="badge bg-warning text-dark">{{ wcount }} strike{{ 's' if wcount != 1 }}</span>
-                        {% else %}
-                        <span class="text-muted">0</span>
-                        {% endif %}
+                        <span class="strike-indicators">
+                            <span class="strike-dot {{ 'strike-1' if wcount >= 1 else 'empty' }}">1st</span>
+                            <span class="strike-dot {{ 'strike-2' if wcount >= 2 else 'empty' }}">2nd</span>
+                            <span class="strike-dot {{ 'strike-3' if wcount >= 3 else 'empty' }}">3rd</span>
+                        </span>
                     </td>
                     <td>
                         {% if visit.student.care_note %}

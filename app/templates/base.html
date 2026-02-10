@@ -20,6 +20,26 @@
             padding: 0.75rem 1rem;
             margin-bottom: 1rem;
         }
+        /* Color-coded strike indicators matching spreadsheet: 1st=yellow, 2nd=orange, 3rd=red */
+        .strike-indicators { display: inline-flex; gap: 0.25rem; align-items: center; }
+        .strike-dot {
+            display: inline-block;
+            width: 1.6rem;
+            height: 1.6rem;
+            line-height: 1.6rem;
+            border-radius: 0.25rem;
+            text-align: center;
+            font-size: 0.65rem;
+            font-weight: 700;
+            color: #000;
+        }
+        .strike-dot.empty {
+            background-color: #e9ecef;
+            color: #adb5bd;
+        }
+        .strike-dot.strike-1 { background-color: #ffc107; }
+        .strike-dot.strike-2 { background-color: #fd7e14; color: #fff; }
+        .strike-dot.strike-3 { background-color: #dc3545; color: #fff; }
     </style>
 </head>
 <body>
