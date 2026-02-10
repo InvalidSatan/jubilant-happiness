@@ -16,6 +16,10 @@ def create_app(config_class=None):
 
     app.config.from_object(config_class)
 
+    # Let config classes perform custom app initialization
+    if hasattr(config_class, "init_app") and callable(config_class.init_app):
+        config_class.init_app(app)
+
     db.init_app(app)
     login_manager.init_app(app)
 

@@ -17,3 +17,21 @@ class Config:
     # ASULearn / Moodle integration
     ASULEARN_API_URL = os.environ.get("ASULEARN_API_URL", "")
     ASULEARN_API_TOKEN = os.environ.get("ASULEARN_API_TOKEN", "")
+
+
+class ProductionConfig(Config):
+    """Production / beta-test configuration."""
+
+    DEBUG = False
+    # In production the SECRET_KEY env var MUST be set
+    SECRET_KEY = os.environ.get("SECRET_KEY")
+
+    # Proxy support — trust X-Forwarded-* headers from reverse proxy
+    PREFERRED_URL_SCHEME = "https"
+
+    @staticmethod
+    def init_app(app):
+        if not app.config.get("SECRET_KEY"):
+            raise RuntimeError(
+                "SECRET_KEY environment variable must be set for production."
+            )
