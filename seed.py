@@ -16,6 +16,7 @@ with app.app_context():
     ceramics = ShopArea.query.filter_by(name="Ceramics").first()
     metal = ShopArea.query.filter_by(name="Metal Smithing").first()
     digilab = ShopArea.query.filter_by(name="DigiLab").first()
+    woodworking = ShopArea.query.filter_by(name="Woodworking").first()
 
     # --- Create an admin monitor ---
     if not Monitor.query.filter_by(username="admin").first():
@@ -23,7 +24,7 @@ with app.app_context():
             username="admin", display_name="Shop Admin", is_admin=True
         )
         admin.set_password("admin")
-        admin.areas = [sculpture, ceramics, metal, digilab]
+        admin.areas = [sculpture, ceramics, metal, digilab, woodworking]
         db.session.add(admin)
         print("Created admin monitor (username: admin, password: admin)")
 
@@ -32,6 +33,7 @@ with app.app_context():
         ("mgarcia", "Maria Garcia", [sculpture, ceramics]),
         ("jchen", "James Chen", [metal]),
         ("asmith", "Alex Smith", [digilab]),
+        ("bwilson", "Blake Wilson", [woodworking]),
     ]
     for uname, dname, areas in monitors_data:
         if not Monitor.query.filter_by(username=uname).first():
@@ -58,6 +60,11 @@ with app.app_context():
         ("Laser Cutter", digilab, True),
         ("CNC Router", digilab, True),
         ("Vinyl Cutter", digilab, False),
+        ("WW1", woodworking, True),
+        ("WW2", woodworking, True),
+        ("Welding", woodworking, True),
+        ("Casting", woodworking, True),
+        ("Carving", woodworking, True),
     ]
     for name, area, req_training in equipment_data:
         if not Equipment.query.filter_by(name=name, area_id=area.id).first():

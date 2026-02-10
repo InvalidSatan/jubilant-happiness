@@ -45,10 +45,10 @@ def create_app(config_class=None):
 
 
 def _seed_areas():
-    """Ensure the four shop areas exist."""
+    """Ensure the five shop areas exist."""
     from app.models import ShopArea
 
-    area_names = ["Sculpture", "Ceramics", "Metal Smithing", "DigiLab"]
+    area_names = ["Sculpture", "Ceramics", "Metal Smithing", "DigiLab", "Woodworking"]
     for name in area_names:
         if not ShopArea.query.filter_by(name=name).first():
             db.session.add(ShopArea(name=name))
