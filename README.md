@@ -7,18 +7,19 @@ A safety logging and access-control system for the Appalachian State University 
 - [Problem Statement](#problem-statement)
 - [Features](#features)
 - [Architecture](#architecture)
-- [Getting Started](#getting-started)
+- [Run Locally](#run-locally)
+- [Deploy to a Server](#deploy-to-a-server)
 - [Usage Guide](#usage-guide)
 - [Database Schema](#database-schema)
 - [External Integrations](#external-integrations)
 - [Configuration](#configuration)
 - [Testing](#testing)
 - [Project Structure](#project-structure)
-- [Roadmap / Open Questions](#roadmap--open-questions)
+- [Roadmap](#roadmap)
 
 ## Problem Statement
 
-The Art Department operates four shared shop areas — **Sculpture**, **Ceramics**, **Metal Smithing**, and **DigiLab** — containing dangerous equipment (band saws, welders, kilns, laser cutters, etc.). Students frequently use these spaces outside of regular staff hours, supervised only by trained student monitors. The department needs a way to:
+The Art Department operates five shared shop areas — **Sculpture**, **Ceramics**, **Metal Smithing**, **DigiLab**, and **Woodworking** — containing dangerous equipment (band saws, welders, kilns, laser cutters, etc.). Students frequently use these spaces outside of regular staff hours, supervised only by trained student monitors. The department needs a way to:
 
 1. **Log** when monitors are on duty and which area they are covering.
 2. **Log** when students enter and leave each area.
@@ -32,32 +33,54 @@ The Art Department operates four shared shop areas — **Sculpture**, **Ceramics
 ### Monitor Management
 - Monitors sign in to a specific shop area to begin their shift.
 - Each monitor is authorized for one or more areas by an admin.
-- When a monitor ends their shift, all remaining students in that area are automatically signed out.
+- When a monitor ends their shift, all remaining students in that area are automatically signed out (with the sign-out monitor recorded).
 - Full session history with duration tracking.
 
 ### Student Sign-In / Sign-Out
 - Monitor looks up a student by Banner ID.
 - Before signing the student in, the system shows:
-  - Equipment training status for the current area (trained / not trained per piece of equipment).
-  - Active warning count.
+  - Equipment training status for the current area (trained / not trained / **no record**) with semester completed.
+  - Color-coded strike indicators (yellow/orange/red for 1st/2nd/3rd).
   - Private care notes (visible to the monitor, not the student).
+- Per-visit notes can be added at sign-in time.
 - The monitor must explicitly click **"Acknowledge & Sign In"** — a student cannot sign in without this step.
 - Students with 3 or more active warnings are blocked from signing in entirely.
 
+### Kiosk Mode
+- Full-screen, dark-themed tablet interface for self-service sign-in/out.
+- Students scan or type their Banner ID — the system auto-detects whether to sign in or sign out.
+- Shows strike indicators and banned status with clear visual feedback.
+- Auto-resets to the input screen after 4 seconds.
+- Launched from the monitor dashboard; requires an active monitor session.
+
 ### Training & Certification Tracking
-- Equipment is registered per area, with a flag indicating whether training is required.
+- Equipment certifications are registered per area, matching the department's actual categories:
+  - **Sculpture:** Basic Woodshop, Advanced Woodshop, Welding, Casting, Carving, CNC Plasma
+  - **Metal Smithing:** Torches, Machine Room, Casting Room, CNC Milling Machine, Annodizing
+  - **DigiLab:** Laser, 3D Printing, Resin Printing, Shopbot, Vinyl Cutter
+  - **Woodworking:** WW1, WW2, Welding, Casting, Carving
+  - **Ceramics:** Kiln, Pottery Wheel, Glaze Station *(placeholders — details TBD)*
+- Training records include the semester certified (e.g., "Fall 2024").
 - Student training records can be managed manually by admins (grant/revoke).
-- An integration sync endpoint can pull completion data from Banner SIS and ASULearn (Moodle) when configured.
+- Students with no training records for an area see a "No Record" badge (distinct from "NOT Certified").
 
 ### Warning / Strike System
 - Any monitor can issue a warning to a student, specifying the area and reason.
 - Warnings are "active" by default; admins can resolve them.
-- **3 active warnings = banned.** The system blocks sign-in and shows a clear banner on the student's profile.
+- **3 active warnings = banned** (global scope — across all areas).
+- Color-coded strike indicators: 1st (yellow), 2nd (orange), 3rd (red).
+
+### Reporting & Exports
+- **Visit Log** — Student sign-in/out history with area, monitor, and note details.
+- **Monitor Coverage** — Shift sessions with per-monitor hours summary.
+- **Safety & Warnings** — Strike counts, per-area breakdown, currently banned students.
+- All reports support **date range** and **area** filtering.
+- One-click **CSV export** for each report.
 
 ### Admin Panel
 - Create and edit monitor accounts, assign area authorizations.
 - Manage equipment inventory per area.
-- Grant or revoke student training certifications.
+- Grant or revoke student training certifications (with semester).
 - View and resolve all warnings.
 - Dashboard with real-time counts (monitors on duty, students signed in, etc.).
 
@@ -72,32 +95,34 @@ The Art Department operates four shared shop areas — **Sculpture**, **Ceramics
 | Forms / CSRF | Flask-WTF |
 | Frontend | Jinja2 templates + Bootstrap 5.3 (CDN) |
 | Password hashing | Werkzeug (pbkdf2) |
-| External API calls | Requests |
+| Production server | Gunicorn |
 
-SQLite is the default database and works well for a single-department deployment. The `SQLALCHEMY_DATABASE_URI` config can be pointed at PostgreSQL or MySQL if needed.
+SQLite is the default database and works well for a single-department deployment. The `DATABASE_URL` config can be pointed at PostgreSQL or MySQL if needed.
 
-## Getting Started
+## Run Locally
 
 ### Prerequisites
 
 - Python 3.11 or later
 - pip
 
-### Installation
+### Quick Start
 
 ```bash
 # Clone the repository
 git clone <repo-url>
 cd jubilant-happiness
 
+# Create a virtual environment (recommended)
+python -m venv venv
+source venv/bin/activate   # Linux/macOS
+# venv\Scripts\activate    # Windows
+
 # Install dependencies
 pip install -r requirements.txt
 
-# Copy environment config (optional — defaults work for development)
-cp .env.example .env
-# Edit .env to set SECRET_KEY for production
-
-# Seed the database with sample data
+# Seed the database with sample data (monitors, equipment, students)
+mkdir -p instance
 python seed.py
 
 # Start the development server
@@ -114,10 +139,150 @@ The app will be running at **http://localhost:5000**.
 | `mgarcia` | `password` | Monitor | Sculpture, Ceramics |
 | `jchen` | `password` | Monitor | Metal Smithing |
 | `asmith` | `password` | Monitor | DigiLab |
+| `bwilson` | `password` | Monitor | Woodworking |
 
 Three sample students are also created (IDs: 900111111, 900222222, 900333333).
 
-**Change all default passwords before deploying to production.**
+### Running Tests
+
+```bash
+pip install pytest
+python -m pytest tests/ -v
+```
+
+All 27 tests should pass. The test suite uses an in-memory SQLite database and disables CSRF.
+
+### Resetting the Database
+
+```bash
+rm -f instance/woodshop.db
+mkdir -p instance
+python seed.py
+```
+
+## Deploy to a Server
+
+This section covers deploying the app as a **beta/test instance** on a Linux server.
+
+### 1. Install and Configure
+
+```bash
+# Clone and enter the repo
+git clone <repo-url>
+cd jubilant-happiness
+
+# Create a virtual environment
+python -m venv venv
+source venv/bin/activate
+
+# Install dependencies (includes gunicorn)
+pip install -r requirements.txt
+
+# Copy the environment template and configure it
+cp .env.example .env
+```
+
+Edit `.env` and set at minimum:
+
+```bash
+# REQUIRED — generate a random secret key:
+#   python -c "import secrets; print(secrets.token_hex(32))"
+SECRET_KEY=<paste-your-generated-key-here>
+
+# Optional — change port or worker count
+PORT=8080
+WORKERS=2
+```
+
+### 2. Seed the Database
+
+```bash
+mkdir -p instance
+python seed.py
+```
+
+**Change all default passwords** via the Admin panel after first login.
+
+### 3. Start the Server
+
+```bash
+chmod +x start.sh
+./start.sh
+```
+
+This runs gunicorn on `0.0.0.0:8080` with 2 workers, access logs to stdout. The app is now accessible at `http://<server-ip>:8080`.
+
+For development mode (Flask debug server) instead:
+
+```bash
+./start.sh --dev
+```
+
+### 4. Run Behind a Reverse Proxy (Recommended)
+
+For HTTPS and a clean URL, put Nginx in front of gunicorn. Example Nginx config:
+
+```nginx
+server {
+    listen 80;
+    server_name shoplog.art.appstate.edu;
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    server_name shoplog.art.appstate.edu;
+
+    ssl_certificate     /etc/ssl/certs/your-cert.pem;
+    ssl_certificate_key /etc/ssl/private/your-key.pem;
+
+    location / {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+### 5. Keep It Running (systemd)
+
+Create `/etc/systemd/system/woodshop-log.service`:
+
+```ini
+[Unit]
+Description=Octagon Woodshop Log
+After=network.target
+
+[Service]
+User=www-data
+WorkingDirectory=/path/to/jubilant-happiness
+EnvironmentFile=/path/to/jubilant-happiness/.env
+ExecStart=/path/to/jubilant-happiness/venv/bin/gunicorn wsgi:app --bind 127.0.0.1:8080 --workers 2
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Then:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable woodshop-log
+sudo systemctl start woodshop-log
+sudo systemctl status woodshop-log    # verify it's running
+```
+
+### 6. Backups
+
+The SQLite database lives at `instance/woodshop.db`. Back it up regularly:
+
+```bash
+# Simple cron job (e.g., nightly at 2 AM)
+0 2 * * * cp /path/to/jubilant-happiness/instance/woodshop.db /path/to/backups/woodshop-$(date +\%Y\%m\%d).db
+```
 
 ## Usage Guide
 
@@ -127,11 +292,19 @@ Three sample students are also created (IDs: 900111111, 900222222, 900333333).
 2. **Monitor selects an area** (e.g., "Sculpture") to begin their shift.
 3. **Student arrives.** Monitor clicks "Sign In a Student" and enters the student's Banner ID.
 4. **System shows the confirmation screen** with:
-   - Training status for equipment in that area.
-   - Any active warnings or care notes.
+   - Training status (with semester) for equipment in that area.
+   - Any active warnings (color-coded) or care notes.
 5. **Monitor clicks "Acknowledge & Sign In"** if everything checks out.
 6. **Student finishes.** Monitor clicks "Sign Out" next to the student on the dashboard.
 7. **Monitor ends their shift.** All remaining students are automatically signed out.
+
+### Kiosk Mode
+
+1. Monitor signs into an area and clicks **"Launch Kiosk"** on the dashboard.
+2. The tablet displays a full-screen dark-themed interface.
+3. Students type or scan their Banner ID — the system auto-detects sign-in vs. sign-out.
+4. After 4 seconds the screen resets for the next student.
+5. Click **"Exit Kiosk"** to return to the dashboard.
 
 ### Issuing a Warning
 
@@ -143,6 +316,13 @@ Three sample students are also created (IDs: 900111111, 900222222, 900333333).
 
 Admins can go to **Admin > View All Warnings** and click "Resolve" on any active warning. This decreases the student's active count and may lift a ban.
 
+### Viewing Reports
+
+Admins can click **Reports** in the navbar to access:
+- **Visit Log** — filter by area and date range, export to CSV.
+- **Monitor Coverage** — see shift hours per monitor, export to CSV.
+- **Safety & Warnings** — review strikes by area, see banned students, export to CSV.
+
 ## Database Schema
 
 ```
@@ -150,30 +330,31 @@ ShopArea            1──M  Equipment
    │                         │
    │                         M
    │                    student_training  ──M  Student
-   │                                           │
-   M                                           │
-monitor_areas  ──M  Monitor                    M
-                      │                     Warning
-                      │                        │
-                      M                        │
-               MonitorSession              (issued_by → Monitor)
-                                           (resolved_by → Monitor)
+   │                    (certified_semester,       │
+   │                     source)                   │
+   M                                               M
+monitor_areas  ──M  Monitor                     Warning
+                      │                            │
+                      M                   (issued_by → Monitor)
+               MonitorSession             (resolved_by → Monitor)
                       │
                       M
                  StudentVisit  ──M  Student
                     (acknowledged_by → Monitor)
+                    (signed_out_by → Monitor)
+                    (note)
 ```
 
 ### Key Models
 
 | Model | Purpose |
 |---|---|
-| `ShopArea` | The four shop areas (Sculpture, Ceramics, Metal Smithing, DigiLab) |
-| `Equipment` | A piece of equipment within an area, with a `requires_training` flag |
+| `ShopArea` | Five shop areas (Sculpture, Ceramics, Metal Smithing, DigiLab, Woodworking) |
+| `Equipment` | A certification category within an area, with a `requires_training` flag |
 | `Monitor` | A student employee who can oversee shop areas; has login credentials |
 | `Student` | A student who uses the shop; identified by Banner ID |
 | `MonitorSession` | Tracks a monitor's on-duty shift for a specific area |
-| `StudentVisit` | Tracks a student's sign-in/out, including which monitor acknowledged it |
+| `StudentVisit` | Tracks a student's sign-in/out, which monitors handled it, and visit notes |
 | `Warning` | A strike issued to a student; 3 active = banned |
 
 ## External Integrations
@@ -190,9 +371,8 @@ The system includes integration stubs for two campus systems. These are located 
 ### ASULearn (Moodle)
 
 - **Purpose:** Pull module/course completion data from the LMS.
-- **Status:** Stub implemented. Requires a Moodle Web Services token from IT.
+- **Status:** Stub implemented. Deferred until new LMS is adopted (summer transition).
 - **Config:** Set `ASULEARN_API_URL` and `ASULEARN_API_TOKEN` in `.env`.
-- **Mapping:** Same `COURSE_EQUIPMENT_MAP` dictionary.
 
 ### Triggering a Sync
 
@@ -204,8 +384,10 @@ All configuration is in `config.py` and can be overridden via environment variab
 
 | Variable | Default | Description |
 |---|---|---|
-| `SECRET_KEY` | `dev-key-change-in-production` | Flask session secret. **Must** be changed in production. |
+| `SECRET_KEY` | `dev-key-change-in-production` | Flask session secret. **Must** be set in production. |
 | `DATABASE_URL` | `sqlite:///instance/woodshop.db` | SQLAlchemy database URI. |
+| `PORT` | `8080` | Server port (used by `start.sh`). |
+| `WORKERS` | `2` | Gunicorn worker count (used by `start.sh`). |
 | `BANNER_API_URL` | *(empty)* | Banner SIS API base URL. |
 | `BANNER_API_KEY` | *(empty)* | Bearer token for Banner API. |
 | `ASULEARN_API_URL` | *(empty)* | ASULearn Moodle Web Services endpoint. |
@@ -218,13 +400,15 @@ pip install pytest
 python -m pytest tests/ -v
 ```
 
-The test suite covers:
+The test suite (27 tests) covers:
 
 - Authentication (login, logout, redirects)
 - Monitor area sign-in / sign-out
 - Student sign-in flow (lookup, acknowledgement, sign-in, sign-out)
 - Ban enforcement (3 strikes blocks sign-in)
 - Warning issuance and accumulation
+- Kiosk mode (scan sign-in, auto sign-out, unknown/banned students)
+- Reports (admin access control, all 3 reports, CSV exports, filters)
 
 Tests use an in-memory SQLite database and disable CSRF for convenience.
 
@@ -239,31 +423,44 @@ Tests use an in-memory SQLite database and disable CSRF for convenience.
 │   │   ├── admin.py             # Admin panel (monitors, equipment, warnings)
 │   │   ├── auth.py              # Login / logout
 │   │   ├── integration.py       # Banner & ASULearn sync stubs
+│   │   ├── kiosk.py             # Kiosk mode (tablet self-service UI)
 │   │   ├── monitor.py           # Monitor dashboard, sessions, student detail
+│   │   ├── reports.py           # Reporting (visits, coverage, safety) + CSV export
 │   │   └── student.py           # Student lookup, registration, sign-in/out
 │   └── templates/
-│       ├── base.html            # Shared layout (navbar, flash messages)
+│       ├── base.html            # Shared layout (navbar, flash messages, strike CSS)
 │       ├── admin/               # Admin panel templates
+│       │   └── reports/         # Report hub, visits, coverage, safety templates
 │       ├── auth/                # Login page
+│       ├── kiosk/               # Full-screen kiosk interface
 │       ├── monitor/             # Dashboard, student detail, session history
 │       └── student/             # Lookup, registration, sign-in confirmation
 ├── tests/
-│   └── test_app.py              # Smoke tests (11 tests)
-├── config.py                    # App configuration
+│   └── test_app.py              # 27 tests (auth, sessions, kiosk, reports)
+├── config.py                    # App configuration (dev + production)
 ├── requirements.txt             # Python dependencies
 ├── run.py                       # Dev server entry point
+├── wsgi.py                      # Production entry point (gunicorn)
+├── start.sh                     # Deployment launcher script
 ├── seed.py                      # Sample data seeder
 ├── .env.example                 # Environment variable template
 └── .gitignore
 ```
 
-## Roadmap / Open Questions
+## Roadmap
 
-These items came directly from the initial requirements meeting and are pending departmental decisions:
+### Completed
+- Core logging system (monitor sessions, student visits, sign-in/out)
+- Real certification categories matching department spreadsheets
+- Semester tracking on training records
+- Per-visit notes and sign-out monitor tracking
+- Color-coded 3-strike warning system (global scope)
+- "No Record" vs "NOT Certified" distinction
+- Kiosk mode for tablet self-service
+- Reporting with CSV export (visits, coverage, safety)
+- Production deployment support (gunicorn, startup script)
 
-1. **Banner API access** — Need the specific endpoint URL, authentication method, and which course codes map to which equipment certifications.
-2. **ASULearn integration** — Need a Moodle Web Services token and confirmation of which course/module completions to query.
-3. **Strikes: global vs. per-area?** — Currently global (3 strikes in *any* area = banned from *all* areas). Can be changed to per-area if the department prefers.
-4. **Student kiosk mode** — The current flow is entirely monitor-driven. If the department wants a self-service kiosk where students scan/swipe an ID, that would be an additional interface on top of the same backend.
-5. **Reporting / exports** — Usage reports (hours per student, busiest times, etc.) could be added once the core logging is in production.
-6. **Production deployment** — For campus deployment, consider running behind Gunicorn + Nginx with PostgreSQL instead of SQLite.
+### Deferred
+- **CSV spreadsheet import** — Tool to bulk-import existing spreadsheet data. May not be needed.
+- **Banner SIS integration** — Auto-sync training certifications from course completions. Waiting on API access from IT.
+- **ASULearn/LMS integration** — Deferred until new LMS is adopted (summer transition).
