@@ -56,9 +56,12 @@
                     </td>
                     <td>
                         {% if visit.student.care_note %}
-                        <span class="badge bg-info" title="{{ visit.student.care_note }}">
-                            Needs attention
+                        <span class="badge bg-info text-dark" title="{{ visit.student.care_note }}">
+                            {{ visit.student.care_note|truncate(30) }}
                         </span>
+                        {% endif %}
+                        {% if visit.note %}
+                        <br><small class="text-muted" title="{{ visit.note }}">{{ visit.note|truncate(30) }}</small>
                         {% endif %}
                     </td>
                     <td>

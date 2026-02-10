@@ -92,6 +92,7 @@ def sign_out():
         ).all()
         for v in open_visits:
             v.signed_out_at = datetime.now(timezone.utc)
+            v.signed_out_by_id = current_user.id
 
         db.session.commit()
         flash("Signed out. All remaining students in the area have been signed out.", "info")

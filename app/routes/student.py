@@ -164,10 +164,12 @@ def sign_in():
         flash(f"{student.display_name} is already signed in to {area.name}.", "warning")
         return redirect(url_for("monitor.dashboard"))
 
+    visit_note = request.form.get("note", "").strip() or None
     visit = StudentVisit(
         student_id=student.id,
         area_id=area.id,
         acknowledged_by_id=current_user.id,
+        note=visit_note,
     )
     db.session.add(visit)
     db.session.commit()
@@ -185,6 +187,7 @@ def sign_out(visit_id):
         return redirect(url_for("monitor.dashboard"))
 
     visit.signed_out_at = datetime.now(timezone.utc)
+    visit.signed_out_by_id = current_user.id
     db.session.commit()
     flash(f"{visit.student.display_name} signed out of {visit.area.name}.", "info")
     return redirect(url_for("monitor.dashboard"))

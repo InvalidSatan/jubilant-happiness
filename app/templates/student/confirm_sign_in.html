@@ -83,6 +83,14 @@
                 <form method="POST" action="{{ url_for('student.sign_in') }}">
                     <input type="hidden" name="student_id" value="{{ student.id }}">
                     <input type="hidden" name="area_id" value="{{ area.id }}">
+                    <div class="mb-3">
+                        <label for="visit_note" class="form-label text-muted">
+                            Visit Note <small>(optional)</small>
+                        </label>
+                        <input type="text" id="visit_note" name="note"
+                               class="form-control form-control-sm"
+                               placeholder="Add a note for this visit...">
+                    </div>
                     <div class="d-flex gap-2">
                         <button type="submit" class="btn btn-success">
                             Acknowledge &amp; Sign In
