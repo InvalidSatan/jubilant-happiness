@@ -16,6 +16,7 @@ with app.app_context():
     ceramics = ShopArea.query.filter_by(name="Ceramics").first()
     metal = ShopArea.query.filter_by(name="Metal Smithing").first()
     digilab = ShopArea.query.filter_by(name="DigiLab").first()
+    woodworking = ShopArea.query.filter_by(name="Woodworking").first()
 
     # --- Create an admin monitor ---
     if not Monitor.query.filter_by(username="admin").first():
@@ -23,7 +24,7 @@ with app.app_context():
             username="admin", display_name="Shop Admin", is_admin=True
         )
         admin.set_password("admin")
-        admin.areas = [sculpture, ceramics, metal, digilab]
+        admin.areas = [sculpture, ceramics, metal, digilab, woodworking]
         db.session.add(admin)
         print("Created admin monitor (username: admin, password: admin)")
 
@@ -32,6 +33,7 @@ with app.app_context():
         ("mgarcia", "Maria Garcia", [sculpture, ceramics]),
         ("jchen", "James Chen", [metal]),
         ("asmith", "Alex Smith", [digilab]),
+        ("bwilson", "Blake Wilson", [woodworking]),
     ]
     for uname, dname, areas in monitors_data:
         if not Monitor.query.filter_by(username=uname).first():
@@ -41,23 +43,39 @@ with app.app_context():
             db.session.add(m)
             print(f"Created monitor: {uname} (password: password)")
 
-    # --- Create sample equipment ---
+    # --- Create equipment / training certifications ---
+    # These match the actual certification categories used in the shop spreadsheets.
+    # Ceramics certifications are placeholders until details are confirmed.
     equipment_data = [
-        ("Band Saw", sculpture, True),
-        ("Table Saw", sculpture, True),
-        ("Wood Lathe", sculpture, True),
-        ("Hand Tools", sculpture, False),
+        # Sculpture
+        ("Basic Woodshop", sculpture, True),
+        ("Advanced Woodshop", sculpture, True),
+        ("Welding", sculpture, True),
+        ("Casting", sculpture, True),
+        ("Carving", sculpture, True),
+        ("CNC Plasma", sculpture, True),
+        # Ceramics (TBD — placeholders)
         ("Kiln", ceramics, True),
         ("Pottery Wheel", ceramics, True),
         ("Glaze Station", ceramics, False),
-        ("MIG Welder", metal, True),
-        ("TIG Welder", metal, True),
-        ("Plasma Cutter", metal, True),
-        ("Anvil & Forge", metal, True),
-        ("3D Printer", digilab, True),
-        ("Laser Cutter", digilab, True),
-        ("CNC Router", digilab, True),
-        ("Vinyl Cutter", digilab, False),
+        # Metals
+        ("Torches (Annealing/Soldering Bench)", metal, True),
+        ("Machine Room (Buffer/Grinder)", metal, True),
+        ("Casting Room", metal, True),
+        ("CNC Milling Machine", metal, True),
+        ("Annodizing", metal, True),
+        # DigiLab
+        ("Laser", digilab, True),
+        ("3D Printing", digilab, True),
+        ("Resin Printing", digilab, True),
+        ("Shopbot", digilab, True),
+        ("Vinyl Cutter", digilab, True),
+        # Woodworking
+        ("WW1", woodworking, True),
+        ("WW2", woodworking, True),
+        ("Welding", woodworking, True),
+        ("Casting", woodworking, True),
+        ("Carving", woodworking, True),
     ]
     for name, area, req_training in equipment_data:
         if not Equipment.query.filter_by(name=name, area_id=area.id).first():

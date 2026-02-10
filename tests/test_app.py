@@ -196,3 +196,166 @@ class TestWarnings:
 
         s = db.session.get(Student, student_id)
         assert s.is_banned is True
+
+
+class TestKiosk:
+    def test_kiosk_requires_active_session(self, client, seed):
+        login(client, "testmon", "pass")
+        resp = client.get("/kiosk/", follow_redirects=True)
+        # Should redirect to dashboard since no active session
+        assert b"Dashboard" in resp.data
+
+    def test_kiosk_sign_in_via_scan(self, client, seed):
+        login(client, "testmon", "pass")
+        client.post("/monitor/sign-in", data={"area_id": seed["area_id"]})
+
+        resp = client.post(
+            "/kiosk/scan",
+            data={"banner_id": seed["student_banner_id"]},
+        )
+        assert resp.status_code == 200
+        assert b"signed in" in resp.data
+
+    def test_kiosk_auto_sign_out(self, client, seed):
+        login(client, "testmon", "pass")
+        client.post("/monitor/sign-in", data={"area_id": seed["area_id"]})
+
+        # First scan — sign in
+        client.post("/kiosk/scan", data={"banner_id": seed["student_banner_id"]})
+        # Second scan — should auto sign out
+        resp = client.post(
+            "/kiosk/scan",
+            data={"banner_id": seed["student_banner_id"]},
+        )
+        assert b"signed out" in resp.data
+
+    def test_kiosk_unknown_student(self, client, seed):
+        login(client, "testmon", "pass")
+        client.post("/monitor/sign-in", data={"area_id": seed["area_id"]})
+
+        resp = client.post("/kiosk/scan", data={"banner_id": "999999999"})
+        assert b"not found" in resp.data
+
+    def test_kiosk_banned_student(self, client, seed):
+        login(client, "testmon", "pass")
+        client.post("/monitor/sign-in", data={"area_id": seed["area_id"]})
+
+        # Issue 3 warnings
+        for i in range(3):
+            w = Warning(
+                student_id=seed["student_id"],
+                area_id=seed["area_id"],
+                issued_by_id=seed["monitor_id"],
+                reason=f"Strike {i + 1}",
+            )
+            db.session.add(w)
+        db.session.commit()
+
+        resp = client.post(
+            "/kiosk/scan",
+            data={"banner_id": seed["student_banner_id"]},
+        )
+        assert b"banned" in resp.data
+
+
+class TestReports:
+    def test_reports_hub_requires_admin(self, client, seed):
+        login(client, "testmon", "pass")
+        resp = client.get("/admin/reports/", follow_redirects=True)
+        assert b"Admin access required" in resp.data
+
+    def test_reports_hub_loads_for_admin(self, client, seed):
+        login(client, "testadmin", "pass")
+        resp = client.get("/admin/reports/")
+        assert resp.status_code == 200
+        assert b"Reports" in resp.data
+        assert b"Visit Log" in resp.data
+
+    def test_visit_report_loads(self, client, seed):
+        login(client, "testadmin", "pass")
+        resp = client.get("/admin/reports/visits")
+        assert resp.status_code == 200
+        assert b"Visit Log" in resp.data
+
+    def test_visit_report_with_data(self, client, seed):
+        login(client, "testadmin", "pass")
+        # Create a visit via kiosk
+        client.post("/monitor/sign-in", data={"area_id": seed["area_id"]})
+        client.post("/kiosk/scan", data={"banner_id": seed["student_banner_id"]})
+
+        resp = client.get("/admin/reports/visits")
+        assert b"Test Student" in resp.data
+        assert b"1 visit" in resp.data
+
+    def test_visit_csv_export(self, client, seed):
+        login(client, "testadmin", "pass")
+        client.post("/monitor/sign-in", data={"area_id": seed["area_id"]})
+        client.post("/kiosk/scan", data={"banner_id": seed["student_banner_id"]})
+
+        resp = client.get("/admin/reports/visits/export")
+        assert resp.status_code == 200
+        assert resp.content_type == "text/csv; charset=utf-8"
+        assert b"Test Student" in resp.data
+        assert b"900999999" in resp.data
+
+    def test_coverage_report_loads(self, client, seed):
+        login(client, "testadmin", "pass")
+        client.post("/monitor/sign-in", data={"area_id": seed["area_id"]})
+
+        resp = client.get("/admin/reports/coverage")
+        assert resp.status_code == 200
+        assert b"Monitor Coverage" in resp.data
+        assert b"Test Admin" in resp.data
+
+    def test_coverage_csv_export(self, client, seed):
+        login(client, "testadmin", "pass")
+        client.post("/monitor/sign-in", data={"area_id": seed["area_id"]})
+
+        resp = client.get("/admin/reports/coverage/export")
+        assert resp.status_code == 200
+        assert resp.content_type == "text/csv; charset=utf-8"
+        assert b"Test Admin" in resp.data
+
+    def test_safety_report_loads(self, client, seed):
+        login(client, "testadmin", "pass")
+        resp = client.get("/admin/reports/safety")
+        assert resp.status_code == 200
+        assert b"Safety" in resp.data
+
+    def test_safety_report_with_warnings(self, client, seed):
+        login(client, "testadmin", "pass")
+        # Issue a warning
+        client.post(
+            "/admin/warnings/issue",
+            data={
+                "student_id": seed["student_id"],
+                "area_id": seed["area_id"],
+                "reason": "Test warning for report",
+            },
+        )
+
+        resp = client.get("/admin/reports/safety")
+        assert b"1" in resp.data  # total count
+        assert b"Test warning for report" in resp.data
+
+    def test_safety_csv_export(self, client, seed):
+        login(client, "testadmin", "pass")
+        client.post(
+            "/admin/warnings/issue",
+            data={
+                "student_id": seed["student_id"],
+                "area_id": seed["area_id"],
+                "reason": "Export test warning",
+            },
+        )
+
+        resp = client.get("/admin/reports/safety/export")
+        assert resp.status_code == 200
+        assert resp.content_type == "text/csv; charset=utf-8"
+        assert b"Export test warning" in resp.data
+
+    def test_report_area_filter(self, client, seed):
+        login(client, "testadmin", "pass")
+        resp = client.get(f"/admin/reports/visits?area_id={seed['area_id']}")
+        assert resp.status_code == 200
+        assert b"Visit Log" in resp.data

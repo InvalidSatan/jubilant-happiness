@@ -160,6 +160,7 @@ def equipment():
 def grant_training():
     student_id = request.form.get("student_id", type=int)
     equipment_id = request.form.get("equipment_id", type=int)
+    certified_semester = request.form.get("certified_semester", "").strip() or None
 
     student = db.session.get(Student, student_id)
     eq = db.session.get(Equipment, equipment_id)
@@ -168,10 +169,19 @@ def grant_training():
         return redirect(request.referrer or url_for("admin.index"))
 
     if eq not in student.trained_equipment:
-        student.trained_equipment.append(eq)
+        db.session.execute(
+            student_training.insert().values(
+                student_id=student.id,
+                equipment_id=eq.id,
+                certified_semester=certified_semester,
+                source="manual",
+            )
+        )
         db.session.commit()
+        label = certified_semester or "no semester specified"
         flash(
-            f"Training on '{eq.name}' granted to {student.display_name}.", "success"
+            f"Training on '{eq.name}' granted to {student.display_name} ({label}).",
+            "success",
         )
     else:
         flash("Student already has this training.", "info")

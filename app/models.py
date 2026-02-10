@@ -25,6 +25,7 @@ student_training = db.Table(
         "equipment_id", db.Integer, db.ForeignKey("equipment.id"), primary_key=True
     ),
     db.Column("certified_date", db.DateTime, default=lambda: datetime.now(timezone.utc)),
+    db.Column("certified_semester", db.String(32), nullable=True),  # e.g. "Fall 2024"
     db.Column("source", db.String(50), default="manual"),  # manual | banner | asulearn
 )
 
@@ -158,10 +159,15 @@ class StudentVisit(db.Model):
     )
     signed_in_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     signed_out_at = db.Column(db.DateTime, nullable=True)
+    note = db.Column(db.Text, nullable=True)  # per-visit monitor note
+    signed_out_by_id = db.Column(
+        db.Integer, db.ForeignKey("monitor.id"), nullable=True
+    )
 
     student = db.relationship("Student", backref="visits")
     area = db.relationship("ShopArea")
-    acknowledged_by = db.relationship("Monitor")
+    acknowledged_by = db.relationship("Monitor", foreign_keys=[acknowledged_by_id])
+    signed_out_by = db.relationship("Monitor", foreign_keys=[signed_out_by_id])
 
     @property
     def is_active(self):

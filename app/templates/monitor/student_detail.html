@@ -37,45 +37,85 @@
                     </button>
                 </form>
             </div>
-            <ul class="list-group list-group-flush">
-                {% for eq in student.trained_equipment %}
-                <li class="list-group-item d-flex justify-content-between align-items-center">
-                    {{ eq.name }} <span class="badge bg-success">Trained</span>
-                </li>
-                {% else %}
-                <li class="list-group-item text-muted">No training records.</li>
-                {% endfor %}
-            </ul>
+            {% if training_records %}
+            <table class="table table-sm table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Certification</th>
+                        <th>Area</th>
+                        <th>Completed</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for rec in training_records %}
+                    <tr>
+                        <td class="fw-medium">{{ rec.name }}</td>
+                        <td><span class="text-muted">{{ rec.area_name }}</span></td>
+                        <td>
+                            {% if rec.certified_semester %}
+                            <span class="badge bg-success">{{ rec.certified_semester }}</span>
+                            {% else %}
+                            <span class="badge bg-success">On file</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <div class="card-body">
+                <span class="badge bg-secondary">No Record</span>
+                <span class="text-muted ms-2">No training data on file. Use "Sync External" to check, or grant certifications manually.</span>
+            </div>
+            {% endif %}
         </div>
     </div>
 
     {# --- Warnings / Strikes --- #}
     <div class="col-md-6 mb-4">
         <div class="card">
-            <div class="card-header">
-                Warnings &amp; Strikes ({{ student.active_warnings_count }} active)
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span>Warnings &amp; Strikes</span>
+                {% set wcount = student.active_warnings_count %}
+                <span class="strike-indicators">
+                    <span class="strike-dot {{ 'strike-1' if wcount >= 1 else 'empty' }}">1st</span>
+                    <span class="strike-dot {{ 'strike-2' if wcount >= 2 else 'empty' }}">2nd</span>
+                    <span class="strike-dot {{ 'strike-3' if wcount >= 3 else 'empty' }}">3rd</span>
+                </span>
             </div>
-            <ul class="list-group list-group-flush">
-                {% for w in warnings %}
-                <li class="list-group-item">
-                    <div class="d-flex justify-content-between">
-                        <strong>{{ w.area.name }}</strong>
-                        {% if w.resolved %}
-                        <span class="badge bg-secondary">Resolved</span>
-                        {% else %}
-                        <span class="badge bg-danger">Active</span>
-                        {% endif %}
-                    </div>
-                    <small class="text-muted">
-                        {{ w.created_at.strftime('%Y-%m-%d %I:%M %p') }}
-                        &mdash; by {{ w.issued_by.display_name }}
-                    </small>
-                    <p class="mb-0 mt-1">{{ w.reason }}</p>
-                </li>
-                {% else %}
-                <li class="list-group-item text-muted">No warnings.</li>
-                {% endfor %}
-            </ul>
+            {% if warnings %}
+            <table class="table table-sm table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Area</th>
+                        <th>Reason</th>
+                        <th>Issued</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for w in warnings %}
+                    <tr class="{{ 'table-warning' if not w.resolved else '' }}">
+                        <td>{{ w.area.name }}</td>
+                        <td>
+                            <span class="d-block">{{ w.reason }}</span>
+                            <small class="text-muted">by {{ w.issued_by.display_name }}</small>
+                        </td>
+                        <td><small>{{ w.created_at.strftime('%Y-%m-%d') }}</small></td>
+                        <td>
+                            {% if w.resolved %}
+                            <span class="badge bg-secondary">Resolved</span>
+                            {% else %}
+                            <span class="badge bg-danger">Active</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <div class="card-body text-muted">No warnings.</div>
+            {% endif %}
         </div>
 
         {# Issue a new warning #}
@@ -122,20 +162,41 @@
 {# --- Recent Visits --- #}
 <div class="card mb-4">
     <div class="card-header">Recent Visits</div>
-    <table class="table table-sm mb-0">
-        <thead>
-            <tr><th>Area</th><th>Signed In</th><th>Signed Out</th><th>Monitor</th></tr>
+    <table class="table table-sm table-hover align-middle mb-0">
+        <thead class="table-light">
+            <tr>
+                <th>Area</th>
+                <th>Signed In</th>
+                <th>Signed Out</th>
+                <th>In By</th>
+                <th>Out By</th>
+                <th>Note</th>
+            </tr>
         </thead>
         <tbody>
             {% for v in visits %}
             <tr>
                 <td>{{ v.area.name }}</td>
                 <td>{{ v.signed_in_at.strftime('%Y-%m-%d %I:%M %p') }}</td>
-                <td>{{ v.signed_out_at.strftime('%Y-%m-%d %I:%M %p') if v.signed_out_at else 'Active' }}</td>
+                <td>
+                    {% if v.signed_out_at %}
+                    {{ v.signed_out_at.strftime('%Y-%m-%d %I:%M %p') }}
+                    {% else %}
+                    <span class="badge bg-success">Active</span>
+                    {% endif %}
+                </td>
                 <td>{{ v.acknowledged_by.display_name }}</td>
+                <td>{{ v.signed_out_by.display_name if v.signed_out_by else '—' }}</td>
+                <td>
+                    {% if v.note %}
+                    <small>{{ v.note }}</small>
+                    {% else %}
+                    <span class="text-muted">—</span>
+                    {% endif %}
+                </td>
             </tr>
             {% else %}
-            <tr><td colspan="4" class="text-muted">No visits recorded.</td></tr>
+            <tr><td colspan="6" class="text-muted">No visits recorded.</td></tr>
             {% endfor %}
         </tbody>
     </table>

@@ -10,6 +10,7 @@ from app.models import (
     MonitorSession,
     ShopArea,
     Equipment,
+    student_training,
 )
 
 student_bp = Blueprint("student", __name__)
@@ -97,10 +98,28 @@ def confirm_sign_in(student_id, area_id):
         area_id=area.id, requires_training=True
     ).all()
 
-    # Which of those the student is trained on
-    trained_ids = {e.id for e in student.trained_equipment}
+    # Query training records for this student to get semester info
+    area_equipment_ids = {eq.id for eq in area_equipment}
+    training_rows = db.session.query(
+        student_training.c.equipment_id,
+        student_training.c.certified_semester,
+    ).filter(
+        student_training.c.student_id == student.id,
+    ).all()
+    training_map = {row.equipment_id: row.certified_semester for row in training_rows}
+
+    # If the student has at least one training record for this area's equipment,
+    # missing ones show "NOT Certified". Otherwise show "No Record" for all.
+    has_area_records = bool(area_equipment_ids & set(training_map.keys()))
+
     equipment_status = [
-        {"equipment": eq, "trained": eq.id in trained_ids} for eq in area_equipment
+        {
+            "equipment": eq,
+            "trained": eq.id in training_map,
+            "semester": training_map.get(eq.id),
+            "no_record": not has_area_records and eq.id not in training_map,
+        }
+        for eq in area_equipment
     ]
 
     return render_template(
@@ -151,10 +170,12 @@ def sign_in():
         flash(f"{student.display_name} is already signed in to {area.name}.", "warning")
         return redirect(url_for("monitor.dashboard"))
 
+    visit_note = request.form.get("note", "").strip() or None
     visit = StudentVisit(
         student_id=student.id,
         area_id=area.id,
         acknowledged_by_id=current_user.id,
+        note=visit_note,
     )
     db.session.add(visit)
     db.session.commit()
@@ -172,6 +193,7 @@ def sign_out(visit_id):
         return redirect(url_for("monitor.dashboard"))
 
     visit.signed_out_at = datetime.now(timezone.utc)
+    visit.signed_out_by_id = current_user.id
     db.session.commit()
     flash(f"{visit.student.display_name} signed out of {visit.area.name}.", "info")
     return redirect(url_for("monitor.dashboard"))

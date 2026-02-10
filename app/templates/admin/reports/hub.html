@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}Reports - Octagon Woodshop Log{% endblock %}
+
+{% block content %}
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{{ url_for('admin.index') }}">Admin</a></li>
+        <li class="breadcrumb-item active">Reports</li>
+    </ol>
+</nav>
+
+<h2>Reports</h2>
+<p class="text-muted mb-4">View activity summaries and export data as CSV.</p>
+
+<div class="row g-4">
+    <div class="col-md-4">
+        <div class="card h-100 border-primary">
+            <div class="card-body text-center">
+                <h4 class="card-title text-primary mb-3">Visit Log</h4>
+                <p class="card-text text-muted">
+                    Student sign-in/out history by area and date range.
+                </p>
+            </div>
+            <div class="card-footer bg-transparent text-center">
+                <a href="{{ url_for('reports.visits') }}" class="btn btn-primary">
+                    View Report
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card h-100 border-success">
+            <div class="card-body text-center">
+                <h4 class="card-title text-success mb-3">Monitor Coverage</h4>
+                <p class="card-text text-muted">
+                    Monitor shift hours and area coverage summary.
+                </p>
+            </div>
+            <div class="card-footer bg-transparent text-center">
+                <a href="{{ url_for('reports.coverage') }}" class="btn btn-success">
+                    View Report
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card h-100 border-warning">
+            <div class="card-body text-center">
+                <h4 class="card-title text-warning mb-3">Safety &amp; Warnings</h4>
+                <p class="card-text text-muted">
+                    Warning history, strike counts, and currently banned students.
+                </p>
+            </div>
+            <div class="card-footer bg-transparent text-center">
+                <a href="{{ url_for('reports.safety') }}" class="btn btn-warning">
+                    View Report
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

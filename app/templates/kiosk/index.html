@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ area.name }} Kiosk - Octagon Woodshop Log</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+          rel="stylesheet">
+    <style>
+        * { user-select: none; }
+        input { user-select: auto; }
+        html, body {
+            height: 100%;
+            overflow: hidden;
+            background-color: #1a1a2e;
+            color: #eee;
+        }
+        .kiosk-wrap {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            padding: 2rem;
+        }
+        .kiosk-header {
+            text-align: center;
+            padding: 1rem 0;
+        }
+        .kiosk-header h1 {
+            font-size: 2.5rem;
+            font-weight: 300;
+            letter-spacing: 0.05em;
+            margin: 0;
+        }
+        .kiosk-header .area-name {
+            font-size: 3.5rem;
+            font-weight: 700;
+            color: #16c79a;
+        }
+        .kiosk-body {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .kiosk-input-wrap {
+            width: 100%;
+            max-width: 600px;
+            text-align: center;
+        }
+        .kiosk-input-wrap label {
+            font-size: 1.4rem;
+            font-weight: 300;
+            margin-bottom: 1rem;
+            display: block;
+        }
+        .kiosk-input {
+            font-size: 2.5rem;
+            text-align: center;
+            padding: 0.75rem 1.5rem;
+            border: 2px solid #444;
+            border-radius: 0.75rem;
+            background: #16213e;
+            color: #eee;
+            width: 100%;
+            letter-spacing: 0.1em;
+        }
+        .kiosk-input:focus {
+            border-color: #16c79a;
+            outline: none;
+            box-shadow: 0 0 0 0.25rem rgba(22, 199, 154, 0.25);
+        }
+        .kiosk-input::placeholder { color: #556; }
+        .kiosk-footer {
+            text-align: center;
+            padding: 1rem 0;
+            color: #556;
+            font-size: 0.9rem;
+        }
+        .kiosk-footer a { color: #888; text-decoration: none; }
+        .kiosk-footer a:hover { color: #aaa; }
+        .visitor-count {
+            font-size: 1rem;
+            color: #888;
+            margin-top: 0.5rem;
+        }
+        .visitor-count strong { color: #16c79a; }
+
+        /* Result overlay */
+        .kiosk-result {
+            text-align: center;
+            animation: fadeIn 0.2s ease-in;
+        }
+        .kiosk-result .result-icon { font-size: 5rem; margin-bottom: 1rem; }
+        .kiosk-result .result-message { font-size: 2rem; font-weight: 600; }
+        .kiosk-result .result-sub { font-size: 1.2rem; color: #888; margin-top: 0.5rem; }
+        .kiosk-result.type-in .result-icon { color: #16c79a; }
+        .kiosk-result.type-out .result-icon { color: #6c9bde; }
+        .kiosk-result.type-error .result-icon { color: #e74c3c; }
+        .kiosk-result.type-banned .result-icon { color: #e74c3c; }
+
+        .kiosk-result .strike-indicators { display: inline-flex; gap: 0.35rem; margin-top: 0.75rem; }
+        .kiosk-result .strike-dot {
+            display: inline-block; width: 2rem; height: 2rem; line-height: 2rem;
+            border-radius: 0.3rem; text-align: center; font-size: 0.75rem;
+            font-weight: 700; color: #000;
+        }
+        .kiosk-result .strike-dot.empty { background-color: #333; color: #555; }
+        .kiosk-result .strike-dot.strike-1 { background-color: #ffc107; }
+        .kiosk-result .strike-dot.strike-2 { background-color: #fd7e14; color: #fff; }
+        .kiosk-result .strike-dot.strike-3 { background-color: #dc3545; color: #fff; }
+
+        @keyframes fadeIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+
+        .countdown-bar {
+            height: 4px;
+            background: #16c79a;
+            margin-top: 2rem;
+            border-radius: 2px;
+            animation: countdown 4s linear forwards;
+        }
+        .type-error .countdown-bar,
+        .type-banned .countdown-bar { background: #e74c3c; }
+        .type-out .countdown-bar { background: #6c9bde; }
+        @keyframes countdown { from { width: 100%; } to { width: 0%; } }
+    </style>
+</head>
+<body>
+    <div class="kiosk-wrap">
+        <div class="kiosk-header">
+            <h1>Octagon Woodshop Log</h1>
+            <div class="area-name">{{ area.name }}</div>
+            <div class="visitor-count"><strong>{{ visitor_count }}</strong> student{{ 's' if visitor_count != 1 }} signed in</div>
+        </div>
+
+        <div class="kiosk-body">
+            {% if result %}
+            {# --- Result screen --- #}
+            <div class="kiosk-result type-{{ result.type }}">
+                {% if result.type == 'in' %}
+                <div class="result-icon">&#10003;</div>
+                {% elif result.type == 'out' %}
+                <div class="result-icon">&#8617;</div>
+                {% else %}
+                <div class="result-icon">&#10007;</div>
+                {% endif %}
+                <div class="result-message">{{ result.message }}</div>
+                {% if result.type == 'in' and result.warnings and result.warnings > 0 %}
+                <div class="result-sub">Active warnings:</div>
+                <span class="strike-indicators">
+                    <span class="strike-dot {{ 'strike-1' if result.warnings >= 1 else 'empty' }}">1st</span>
+                    <span class="strike-dot {{ 'strike-2' if result.warnings >= 2 else 'empty' }}">2nd</span>
+                    <span class="strike-dot {{ 'strike-3' if result.warnings >= 3 else 'empty' }}">3rd</span>
+                </span>
+                {% endif %}
+                {% if result.type == 'banned' %}
+                <div class="result-sub">This student has 3 or more active strikes.</div>
+                {% endif %}
+                <div class="countdown-bar"></div>
+            </div>
+            {% else %}
+            {# --- Input screen --- #}
+            <div class="kiosk-input-wrap">
+                <label>Scan or enter your Banner ID</label>
+                <form method="POST" action="{{ url_for('kiosk.scan') }}" autocomplete="off">
+                    <input type="text" name="banner_id" class="kiosk-input"
+                           placeholder="900000000" autofocus
+                           inputmode="numeric" pattern="[0-9]*">
+                </form>
+            </div>
+            {% endif %}
+        </div>
+
+        <div class="kiosk-footer">
+            <a href="{{ url_for('monitor.dashboard') }}">Exit Kiosk</a>
+        </div>
+    </div>
+
+    {% if result %}
+    <script>
+        setTimeout(function() { window.location.href = "{{ url_for('kiosk.index') }}"; }, 4000);
+    </script>
+    {% else %}
+    <script>
+        // Keep focus on the input at all times
+        var input = document.querySelector('.kiosk-input');
+        if (input) {
+            document.addEventListener('click', function() { input.focus(); });
+            document.addEventListener('keydown', function() { input.focus(); });
+        }
+    </script>
+    {% endif %}
+</body>
+</html>

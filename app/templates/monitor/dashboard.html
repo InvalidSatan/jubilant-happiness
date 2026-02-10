@@ -19,9 +19,14 @@
     <div class="card-body">
         <div class="d-flex justify-content-between align-items-center mb-3">
             <h5 class="mb-0">Students Currently Signed In</h5>
-            <a href="{{ url_for('student.lookup') }}" class="btn btn-primary btn-sm">
-                Sign In a Student
-            </a>
+            <div class="d-flex gap-2">
+                <a href="{{ url_for('kiosk.index') }}" class="btn btn-outline-dark btn-sm">
+                    Launch Kiosk
+                </a>
+                <a href="{{ url_for('student.lookup') }}" class="btn btn-primary btn-sm">
+                    Sign In a Student
+                </a>
+            </div>
         </div>
 
         {% if active_visitors %}
@@ -48,17 +53,20 @@
                     <td>{{ visit.signed_in_at.strftime('%I:%M %p') }}</td>
                     <td>
                         {% set wcount = visit.student.active_warnings_count %}
-                        {% if wcount > 0 %}
-                        <span class="badge bg-warning text-dark">{{ wcount }} strike{{ 's' if wcount != 1 }}</span>
-                        {% else %}
-                        <span class="text-muted">0</span>
-                        {% endif %}
+                        <span class="strike-indicators">
+                            <span class="strike-dot {{ 'strike-1' if wcount >= 1 else 'empty' }}">1st</span>
+                            <span class="strike-dot {{ 'strike-2' if wcount >= 2 else 'empty' }}">2nd</span>
+                            <span class="strike-dot {{ 'strike-3' if wcount >= 3 else 'empty' }}">3rd</span>
+                        </span>
                     </td>
                     <td>
                         {% if visit.student.care_note %}
-                        <span class="badge bg-info" title="{{ visit.student.care_note }}">
-                            Needs attention
+                        <span class="badge bg-info text-dark" title="{{ visit.student.care_note }}">
+                            {{ visit.student.care_note|truncate(30) }}
                         </span>
+                        {% endif %}
+                        {% if visit.note %}
+                        <br><small class="text-muted" title="{{ visit.note }}">{{ visit.note|truncate(30) }}</small>
                         {% endif %}
                     </td>
                     <td>

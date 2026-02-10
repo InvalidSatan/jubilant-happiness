@@ -34,28 +34,52 @@
                 </div>
                 {% endif %}
 
-                {# --- Warning count --- #}
+                {# --- Strike indicators --- #}
                 {% set wcount = student.active_warnings_count %}
                 {% if wcount > 0 %}
-                <div class="alert alert-warning">
-                    This student has <strong>{{ wcount }}</strong> active warning(s).
+                <div class="alert alert-{{ 'danger' if wcount >= 3 else 'warning' }} d-flex align-items-center gap-3">
+                    <span class="strike-indicators">
+                        <span class="strike-dot {{ 'strike-1' if wcount >= 1 else 'empty' }}">1st</span>
+                        <span class="strike-dot {{ 'strike-2' if wcount >= 2 else 'empty' }}">2nd</span>
+                        <span class="strike-dot {{ 'strike-3' if wcount >= 3 else 'empty' }}">3rd</span>
+                    </span>
+                    <span>This student has <strong>{{ wcount }}</strong> active warning{{ 's' if wcount != 1 }}.</span>
                 </div>
                 {% endif %}
 
                 {# --- Equipment training status --- #}
                 {% if equipment_status %}
-                <h5>Equipment Training for {{ area.name }}</h5>
-                <table class="table table-sm">
-                    <thead><tr><th>Equipment</th><th>Status</th></tr></thead>
+                <h5 class="mb-3">Training Certifications for {{ area.name }}</h5>
+                <table class="table table-sm table-hover align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Certification</th>
+                            <th>Status</th>
+                            <th>Completed</th>
+                        </tr>
+                    </thead>
                     <tbody>
                         {% for item in equipment_status %}
                         <tr>
-                            <td>{{ item.equipment.name }}</td>
+                            <td class="fw-medium">{{ item.equipment.name }}</td>
                             <td>
                                 {% if item.trained %}
-                                <span class="badge bg-success">Trained</span>
+                                <span class="badge bg-success">Certified</span>
+                                {% elif item.no_record %}
+                                <span class="badge bg-secondary">No Record</span>
                                 {% else %}
-                                <span class="badge bg-danger">NOT Trained</span>
+                                <span class="badge bg-danger">NOT Certified</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if item.trained and item.semester %}
+                                <span class="text-success">{{ item.semester }}</span>
+                                {% elif item.trained %}
+                                <span class="text-muted">On file</span>
+                                {% elif item.no_record %}
+                                <span class="text-muted">No Record</span>
+                                {% else %}
+                                <span class="text-muted">&mdash;</span>
                                 {% endif %}
                             </td>
                         </tr>
@@ -68,6 +92,14 @@
                 <form method="POST" action="{{ url_for('student.sign_in') }}">
                     <input type="hidden" name="student_id" value="{{ student.id }}">
                     <input type="hidden" name="area_id" value="{{ area.id }}">
+                    <div class="mb-3">
+                        <label for="visit_note" class="form-label text-muted">
+                            Visit Note <small>(optional)</small>
+                        </label>
+                        <input type="text" id="visit_note" name="note"
+                               class="form-control form-control-sm"
+                               placeholder="Add a note for this visit...">
+                    </div>
                     <div class="d-flex gap-2">
                         <button type="submit" class="btn btn-success">
                             Acknowledge &amp; Sign In
