@@ -99,6 +99,7 @@ def confirm_sign_in(student_id, area_id):
     ).all()
 
     # Query training records for this student to get semester info
+    area_equipment_ids = {eq.id for eq in area_equipment}
     training_rows = db.session.query(
         student_training.c.equipment_id,
         student_training.c.certified_semester,
@@ -107,11 +108,16 @@ def confirm_sign_in(student_id, area_id):
     ).all()
     training_map = {row.equipment_id: row.certified_semester for row in training_rows}
 
+    # If the student has at least one training record for this area's equipment,
+    # missing ones show "NOT Certified". Otherwise show "No Record" for all.
+    has_area_records = bool(area_equipment_ids & set(training_map.keys()))
+
     equipment_status = [
         {
             "equipment": eq,
             "trained": eq.id in training_map,
             "semester": training_map.get(eq.id),
+            "no_record": not has_area_records and eq.id not in training_map,
         }
         for eq in area_equipment
     ]

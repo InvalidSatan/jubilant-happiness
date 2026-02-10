@@ -65,6 +65,8 @@
                             <td>
                                 {% if item.trained %}
                                 <span class="badge bg-success">Certified</span>
+                                {% elif item.no_record %}
+                                <span class="badge bg-secondary">No Record</span>
                                 {% else %}
                                 <span class="badge bg-danger">NOT Certified</span>
                                 {% endif %}
@@ -74,6 +76,8 @@
                                 <span class="text-success">{{ item.semester }}</span>
                                 {% elif item.trained %}
                                 <span class="text-muted">On file</span>
+                                {% elif item.no_record %}
+                                <span class="text-muted">No Record</span>
                                 {% else %}
                                 <span class="text-muted">&mdash;</span>
                                 {% endif %}

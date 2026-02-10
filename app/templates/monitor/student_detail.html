@@ -63,7 +63,10 @@
                 </tbody>
             </table>
             {% else %}
-            <div class="card-body text-muted">No training records.</div>
+            <div class="card-body">
+                <span class="badge bg-secondary">No Record</span>
+                <span class="text-muted ms-2">No training data on file. Use "Sync External" to check, or grant certifications manually.</span>
+            </div>
             {% endif %}
         </div>
     </div>
