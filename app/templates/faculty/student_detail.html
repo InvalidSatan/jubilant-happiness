@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+{% block title %}{{ student.display_name }} - Octagon Woodshop Log{% endblock %}
+
+{% block content %}
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{{ url_for('faculty.dashboard') }}">Dashboard</a></li>
+        <li class="breadcrumb-item"><a href="{{ url_for('faculty.students') }}">Students</a></li>
+        <li class="breadcrumb-item active">{{ student.display_name }}</li>
+    </ol>
+</nav>
+
+<h2>{{ student.display_name }} <small class="text-muted">({{ student.student_id }})</small></h2>
+
+{# --- Edit Student Info --- #}
+<div class="card mb-4">
+    <div class="card-header">Student Information</div>
+    <div class="card-body">
+        <form method="POST" action="{{ url_for('faculty.edit_student', student_id=student.id) }}">
+            <div class="row">
+                <div class="col-md-4 mb-3">
+                    <label class="form-label">Banner ID</label>
+                    <input type="text" class="form-control" value="{{ student.student_id }}" disabled>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label class="form-label">Display Name</label>
+                    <input type="text" name="display_name" class="form-control"
+                           value="{{ student.display_name }}" required>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label class="form-label">Email</label>
+                    <input type="email" name="email" class="form-control"
+                           value="{{ student.email or '' }}">
+                </div>
+            </div>
+            <button type="submit" class="btn btn-outline-primary btn-sm">Update Info</button>
+        </form>
+    </div>
+</div>
+
+<div class="row">
+    {# --- Current Training --- #}
+    <div class="col-md-7 mb-4">
+        <div class="card">
+            <div class="card-header">Training &amp; Certifications</div>
+            {% if training_records %}
+            <table class="table table-sm table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Certification</th>
+                        <th>Area</th>
+                        <th>Semester</th>
+                        <th>Source</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for rec in training_records %}
+                    <tr>
+                        <td class="fw-medium">{{ rec.name }}</td>
+                        <td><span class="text-muted">{{ rec.area_name }}</span></td>
+                        <td>
+                            <form method="POST" action="{{ url_for('faculty.update_training') }}" class="d-inline">
+                                <input type="hidden" name="student_id" value="{{ student.id }}">
+                                <input type="hidden" name="equipment_id" value="{{ rec.equipment_id }}">
+                                <div class="input-group input-group-sm" style="width: 200px;">
+                                    <input type="text" name="certified_semester" class="form-control"
+                                           value="{{ rec.certified_semester or '' }}"
+                                           placeholder="e.g. Fall 2025">
+                                    <button type="submit" class="btn btn-outline-secondary"
+                                            title="Update semester">Save</button>
+                                </div>
+                            </form>
+                        </td>
+                        <td><small class="text-muted">{{ rec.source }}</small></td>
+                        <td>
+                            <form method="POST" action="{{ url_for('faculty.revoke_training') }}"
+                                  onsubmit="return confirm('Revoke this training?');">
+                                <input type="hidden" name="student_id" value="{{ student.id }}">
+                                <input type="hidden" name="equipment_id" value="{{ rec.equipment_id }}">
+                                <button type="submit" class="btn btn-outline-danger btn-sm">Revoke</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <div class="card-body text-muted">
+                No training certifications on file.
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    {# --- Grant New Training --- #}
+    <div class="col-md-5 mb-4">
+        <div class="card">
+            <div class="card-header">Grant Training</div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('faculty.grant_training') }}">
+                    <input type="hidden" name="student_id" value="{{ student.id }}">
+                    <div class="mb-3">
+                        <label class="form-label">Equipment / Certification</label>
+                        <select name="equipment_id" class="form-select" required>
+                            <option value="">Select...</option>
+                            {% for area in areas %}
+                            <optgroup label="{{ area.name }}">
+                                {% for eq in all_equipment %}
+                                {% if eq.area_id == area.id %}
+                                <option value="{{ eq.id }}">{{ eq.name }}</option>
+                                {% endif %}
+                                {% endfor %}
+                            </optgroup>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Semester (optional)</label>
+                        <input type="text" name="certified_semester" class="form-control"
+                               placeholder="e.g. Fall 2025">
+                    </div>
+                    <button type="submit" class="btn btn-success btn-sm">Grant Training</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

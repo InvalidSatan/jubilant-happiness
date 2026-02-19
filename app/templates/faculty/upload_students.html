@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Upload Students - Octagon Woodshop Log{% endblock %}
+
+{% block content %}
+<h2>Upload Students via CSV</h2>
+
+<div class="row">
+    <div class="col-md-7">
+        <div class="card">
+            <div class="card-body">
+                <form method="POST" enctype="multipart/form-data">
+                    <div class="mb-3">
+                        <label class="form-label">CSV File</label>
+                        <input type="file" name="csv_file" class="form-control"
+                               accept=".csv" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Upload &amp; Import</button>
+                    <a href="{{ url_for('faculty.students') }}" class="btn btn-outline-secondary">Cancel</a>
+                </form>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-5">
+        <div class="card bg-light">
+            <div class="card-header">CSV Format</div>
+            <div class="card-body">
+                <p class="mb-2">The CSV file must include these columns:</p>
+                <table class="table table-sm">
+                    <thead>
+                        <tr><th>Column</th><th>Required</th><th>Aliases</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>banner_id</code></td>
+                            <td>Yes</td>
+                            <td><code>student_id</code>, <code>id</code></td>
+                        </tr>
+                        <tr>
+                            <td><code>name</code></td>
+                            <td>Yes</td>
+                            <td><code>display_name</code>, <code>full_name</code>, <code>student_name</code></td>
+                        </tr>
+                        <tr>
+                            <td><code>email</code></td>
+                            <td>No</td>
+                            <td>—</td>
+                        </tr>
+                    </tbody>
+                </table>
+                <p class="mb-1"><strong>Example:</strong></p>
+                <pre class="bg-white p-2 border rounded mb-0">banner_id,name,email
+900111111,Taylor Johnson,tjohnson@appstate.edu
+900222222,Jordan Lee,jlee@appstate.edu</pre>
+                <p class="text-muted mt-2 mb-0">
+                    <small>Students with duplicate Banner IDs will be skipped.</small>
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

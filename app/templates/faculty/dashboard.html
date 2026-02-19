@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% block title %}Faculty Dashboard - Octagon Woodshop Log{% endblock %}
+
+{% block content %}
+<h2>Faculty Dashboard</h2>
+
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h3>{{ students_count }}</h3>
+                <p class="mb-0">Registered Students</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h3>{{ trained_count }}</h3>
+                <p class="mb-0">Students with Training</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h3>{{ monitors_count }}</h3>
+                <p class="mb-0">Monitors</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h3>{{ areas | length }}</h3>
+                <p class="mb-0">Shop Areas</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-4 mb-3">
+        <div class="card h-100">
+            <div class="card-body">
+                <h5 class="card-title">Student Management</h5>
+                <p class="card-text">Add students individually or upload a CSV to register them in bulk.</p>
+                <a href="{{ url_for('faculty.students') }}" class="btn btn-primary">View Students</a>
+                <a href="{{ url_for('faculty.add_student') }}" class="btn btn-outline-primary">Add Student</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4 mb-3">
+        <div class="card h-100">
+            <div class="card-body">
+                <h5 class="card-title">Training Certifications</h5>
+                <p class="card-text">Grant, update, or revoke equipment training certifications for students.</p>
+                <a href="{{ url_for('faculty.training') }}" class="btn btn-primary">Manage Training</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4 mb-3">
+        <div class="card h-100">
+            <div class="card-body">
+                <h5 class="card-title">CSV Upload</h5>
+                <p class="card-text">Bulk add students from a CSV file with banner ID, name, and email.</p>
+                <a href="{{ url_for('faculty.upload_students') }}" class="btn btn-primary">Upload CSV</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if current_user.is_primary_admin %}
+<hr>
+<h4>Primary Admin</h4>
+<div class="row">
+    <div class="col-md-4 mb-3">
+        <div class="card h-100">
+            <div class="card-body">
+                <h5 class="card-title">Monitor Management</h5>
+                <p class="card-text">Add, edit, and manage shop monitors and their area assignments.</p>
+                <a href="{{ url_for('faculty.monitors') }}" class="btn btn-outline-secondary">Manage Monitors</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4 mb-3">
+        <div class="card h-100">
+            <div class="card-body">
+                <h5 class="card-title">Faculty Accounts</h5>
+                <p class="card-text">Add and manage other faculty accounts for the system.</p>
+                <a href="{{ url_for('faculty.faculty_accounts') }}" class="btn btn-outline-secondary">Manage Faculty</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

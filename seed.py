@@ -6,7 +6,7 @@ Usage:
 """
 
 from app import create_app, db
-from app.models import Monitor, ShopArea, Equipment, Student
+from app.models import Monitor, ShopArea, Equipment, Student, Faculty
 
 app = create_app()
 
@@ -82,6 +82,29 @@ with app.app_context():
             db.session.add(
                 Equipment(name=name, area_id=area.id, requires_training=req_training)
             )
+
+    # --- Create faculty accounts ---
+    if not Faculty.query.filter_by(username="faculty").first():
+        fac = Faculty(
+            username="faculty",
+            display_name="Dr. Faculty Admin",
+            email="faculty@appstate.edu",
+            is_primary_admin=True,
+        )
+        fac.set_password("faculty")
+        db.session.add(fac)
+        print("Created primary faculty admin (username: faculty, password: faculty)")
+
+    if not Faculty.query.filter_by(username="instructor").first():
+        fac2 = Faculty(
+            username="instructor",
+            display_name="Prof. Instructor",
+            email="instructor@appstate.edu",
+            is_primary_admin=False,
+        )
+        fac2.set_password("password")
+        db.session.add(fac2)
+        print("Created faculty member (username: instructor, password: password)")
 
     # --- Create sample students ---
     students_data = [

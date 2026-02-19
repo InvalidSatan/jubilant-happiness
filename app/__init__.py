@@ -23,10 +23,17 @@ def create_app(config_class=None):
     db.init_app(app)
     login_manager.init_app(app)
 
-    from app.models import Monitor
+    from app.models import Monitor, Faculty
 
     @login_manager.user_loader
     def load_user(user_id):
+        if ":" in str(user_id):
+            user_type, uid = user_id.split(":", 1)
+            uid = int(uid)
+            if user_type == "faculty":
+                return db.session.get(Faculty, uid)
+            return db.session.get(Monitor, uid)
+        # Backwards compatibility: bare integer means Monitor
         return db.session.get(Monitor, int(user_id))
 
     from app.routes.auth import auth_bp
@@ -36,6 +43,7 @@ def create_app(config_class=None):
     from app.routes.integration import integration_bp
     from app.routes.kiosk import kiosk_bp
     from app.routes.reports import reports_bp
+    from app.routes.faculty import faculty_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(monitor_bp, url_prefix="/monitor")
@@ -44,6 +52,7 @@ def create_app(config_class=None):
     app.register_blueprint(integration_bp, url_prefix="/integration")
     app.register_blueprint(kiosk_bp, url_prefix="/kiosk")
     app.register_blueprint(reports_bp, url_prefix="/admin/reports")
+    app.register_blueprint(faculty_bp, url_prefix="/faculty")
 
     with app.app_context():
         db.create_all()

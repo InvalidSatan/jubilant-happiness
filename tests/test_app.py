@@ -3,7 +3,7 @@
 import pytest
 
 from app import create_app, db
-from app.models import Monitor, Student, ShopArea, MonitorSession, StudentVisit, Warning
+from app.models import Monitor, Student, ShopArea, MonitorSession, StudentVisit, Warning, Faculty, Equipment
 from config import Config
 
 
@@ -359,3 +359,364 @@ class TestReports:
         resp = client.get(f"/admin/reports/visits?area_id={seed['area_id']}")
         assert resp.status_code == 200
         assert b"Visit Log" in resp.data
+
+
+# ---------------------------------------------------------------------------
+# Faculty tests
+# ---------------------------------------------------------------------------
+@pytest.fixture
+def faculty_seed(app):
+    """Create faculty test data."""
+    area = ShopArea.query.filter_by(name="Sculpture").first()
+
+    faculty_admin = Faculty(
+        username="testfaculty",
+        display_name="Test Faculty",
+        email="faculty@appstate.edu",
+        is_primary_admin=True,
+    )
+    faculty_admin.set_password("pass")
+    db.session.add(faculty_admin)
+
+    faculty_member = Faculty(
+        username="testinstructor",
+        display_name="Test Instructor",
+        email="instructor@appstate.edu",
+        is_primary_admin=False,
+    )
+    faculty_member.set_password("pass")
+    db.session.add(faculty_member)
+
+    student = Student(
+        student_id="900888888", display_name="Faculty Test Student", email="ftest@appstate.edu"
+    )
+    db.session.add(student)
+
+    monitor = Monitor(username="facmon", display_name="Faculty Monitor")
+    monitor.set_password("pass")
+    monitor.areas.append(area)
+    db.session.add(monitor)
+
+    # Add equipment for training tests
+    eq = Equipment.query.filter_by(area_id=area.id).first()
+    if not eq:
+        eq = Equipment(name="Test Equip", area_id=area.id, requires_training=True)
+        db.session.add(eq)
+
+    db.session.commit()
+
+    return {
+        "faculty_admin_id": faculty_admin.id,
+        "faculty_member_id": faculty_member.id,
+        "student_id": student.id,
+        "student_banner_id": student.student_id,
+        "area_id": area.id,
+        "monitor_id": monitor.id,
+        "equipment_id": eq.id,
+    }
+
+
+def faculty_login(client, username, password):
+    return client.post(
+        "/faculty/login",
+        data={"username": username, "password": password},
+        follow_redirects=True,
+    )
+
+
+class TestFacultyAuth:
+    def test_faculty_login_page_loads(self, client):
+        resp = client.get("/faculty/login")
+        assert resp.status_code == 200
+        assert b"Faculty Sign In" in resp.data
+
+    def test_faculty_login_success(self, client, faculty_seed):
+        resp = faculty_login(client, "testfaculty", "pass")
+        assert resp.status_code == 200
+        assert b"Faculty Dashboard" in resp.data
+
+    def test_faculty_login_failure(self, client, faculty_seed):
+        resp = faculty_login(client, "testfaculty", "wrong")
+        assert b"Invalid username or password" in resp.data
+
+    def test_faculty_logout(self, client, faculty_seed):
+        faculty_login(client, "testfaculty", "pass")
+        resp = client.get("/faculty/logout", follow_redirects=True)
+        assert b"Faculty Sign In" in resp.data
+
+    def test_monitor_cannot_access_faculty_routes(self, client, faculty_seed):
+        login(client, "facmon", "pass")
+        resp = client.get("/faculty/", follow_redirects=True)
+        assert b"Faculty access required" in resp.data
+
+    def test_faculty_dashboard_loads(self, client, faculty_seed):
+        faculty_login(client, "testfaculty", "pass")
+        resp = client.get("/faculty/")
+        assert resp.status_code == 200
+        assert b"Faculty Dashboard" in resp.data
+
+
+class TestFacultyStudentManagement:
+    def test_students_list_loads(self, client, faculty_seed):
+        faculty_login(client, "testfaculty", "pass")
+        resp = client.get("/faculty/students")
+        assert resp.status_code == 200
+        assert b"Faculty Test Student" in resp.data
+
+    def test_students_search(self, client, faculty_seed):
+        faculty_login(client, "testfaculty", "pass")
+        resp = client.get("/faculty/students?search=900888888")
+        assert b"Faculty Test Student" in resp.data
+
+    def test_add_student_page_loads(self, client, faculty_seed):
+        faculty_login(client, "testfaculty", "pass")
+        resp = client.get("/faculty/students/add")
+        assert resp.status_code == 200
+        assert b"Add Student" in resp.data
+
+    def test_add_student(self, client, faculty_seed):
+        faculty_login(client, "testfaculty", "pass")
+        resp = client.post(
+            "/faculty/students/add",
+            data={
+                "student_id": "900777777",
+                "display_name": "New Student",
+                "email": "new@appstate.edu",
+            },
+            follow_redirects=True,
+        )
+        assert b"New Student" in resp.data
+        assert Student.query.filter_by(student_id="900777777").first() is not None
+
+    def test_add_duplicate_student(self, client, faculty_seed):
+        faculty_login(client, "testfaculty", "pass")
+        resp = client.post(
+            "/faculty/students/add",
+            data={
+                "student_id": "900888888",
+                "display_name": "Duplicate",
+            },
+            follow_redirects=True,
+        )
+        assert b"already exists" in resp.data
+
+    def test_student_detail_loads(self, client, faculty_seed):
+        faculty_login(client, "testfaculty", "pass")
+        resp = client.get(f"/faculty/students/{faculty_seed['student_id']}")
+        assert resp.status_code == 200
+        assert b"Faculty Test Student" in resp.data
+
+    def test_edit_student(self, client, faculty_seed):
+        faculty_login(client, "testfaculty", "pass")
+        resp = client.post(
+            f"/faculty/students/{faculty_seed['student_id']}/edit",
+            data={
+                "display_name": "Updated Name",
+                "email": "updated@appstate.edu",
+            },
+            follow_redirects=True,
+        )
+        assert b"Student information updated" in resp.data
+        s = db.session.get(Student, faculty_seed["student_id"])
+        assert s.display_name == "Updated Name"
+
+
+class TestFacultyCSVUpload:
+    def test_upload_page_loads(self, client, faculty_seed):
+        faculty_login(client, "testfaculty", "pass")
+        resp = client.get("/faculty/students/upload")
+        assert resp.status_code == 200
+        assert b"Upload Students" in resp.data
+
+    def test_csv_upload_success(self, client, faculty_seed):
+        faculty_login(client, "testfaculty", "pass")
+        csv_content = "banner_id,name,email\n900666666,CSV Student,csv@appstate.edu\n900555555,Another Student,another@appstate.edu"
+        import io
+        data = {
+            "csv_file": (io.BytesIO(csv_content.encode("utf-8")), "students.csv"),
+        }
+        resp = client.post(
+            "/faculty/students/upload",
+            data=data,
+            content_type="multipart/form-data",
+            follow_redirects=True,
+        )
+        assert b"2 student(s) added" in resp.data
+        assert Student.query.filter_by(student_id="900666666").first() is not None
+        assert Student.query.filter_by(student_id="900555555").first() is not None
+
+    def test_csv_upload_with_duplicates(self, client, faculty_seed):
+        faculty_login(client, "testfaculty", "pass")
+        csv_content = "banner_id,name,email\n900888888,Duplicate,dup@appstate.edu\n900444444,New One,new@appstate.edu"
+        import io
+        data = {
+            "csv_file": (io.BytesIO(csv_content.encode("utf-8")), "students.csv"),
+        }
+        resp = client.post(
+            "/faculty/students/upload",
+            data=data,
+            content_type="multipart/form-data",
+            follow_redirects=True,
+        )
+        assert b"1 student(s) added" in resp.data
+        assert b"1 skipped" in resp.data
+
+    def test_csv_upload_alt_columns(self, client, faculty_seed):
+        faculty_login(client, "testfaculty", "pass")
+        csv_content = "student_id,display_name,email\n900333444,Alt Student,alt@appstate.edu"
+        import io
+        data = {
+            "csv_file": (io.BytesIO(csv_content.encode("utf-8")), "students.csv"),
+        }
+        resp = client.post(
+            "/faculty/students/upload",
+            data=data,
+            content_type="multipart/form-data",
+            follow_redirects=True,
+        )
+        assert b"1 student(s) added" in resp.data
+
+    def test_csv_upload_rejects_non_csv(self, client, faculty_seed):
+        faculty_login(client, "testfaculty", "pass")
+        import io
+        data = {
+            "csv_file": (io.BytesIO(b"not a csv"), "students.txt"),
+        }
+        resp = client.post(
+            "/faculty/students/upload",
+            data=data,
+            content_type="multipart/form-data",
+            follow_redirects=True,
+        )
+        assert b"must be a CSV" in resp.data
+
+
+class TestFacultyTraining:
+    def test_training_page_loads(self, client, faculty_seed):
+        faculty_login(client, "testfaculty", "pass")
+        resp = client.get("/faculty/training")
+        assert resp.status_code == 200
+        assert b"Training Certifications" in resp.data
+
+    def test_grant_training(self, client, faculty_seed):
+        faculty_login(client, "testfaculty", "pass")
+        resp = client.post(
+            "/faculty/training/grant",
+            data={
+                "student_id": faculty_seed["student_id"],
+                "equipment_id": faculty_seed["equipment_id"],
+                "certified_semester": "Fall 2025",
+            },
+            follow_redirects=True,
+        )
+        assert b"granted" in resp.data
+
+    def test_update_training(self, client, faculty_seed):
+        faculty_login(client, "testfaculty", "pass")
+        # First grant
+        client.post(
+            "/faculty/training/grant",
+            data={
+                "student_id": faculty_seed["student_id"],
+                "equipment_id": faculty_seed["equipment_id"],
+                "certified_semester": "Fall 2025",
+            },
+        )
+        # Then update
+        resp = client.post(
+            "/faculty/training/update",
+            data={
+                "student_id": faculty_seed["student_id"],
+                "equipment_id": faculty_seed["equipment_id"],
+                "certified_semester": "Spring 2026",
+            },
+            follow_redirects=True,
+        )
+        assert b"updated" in resp.data
+
+    def test_revoke_training(self, client, faculty_seed):
+        faculty_login(client, "testfaculty", "pass")
+        # Grant first
+        client.post(
+            "/faculty/training/grant",
+            data={
+                "student_id": faculty_seed["student_id"],
+                "equipment_id": faculty_seed["equipment_id"],
+            },
+        )
+        # Revoke
+        resp = client.post(
+            "/faculty/training/revoke",
+            data={
+                "student_id": faculty_seed["student_id"],
+                "equipment_id": faculty_seed["equipment_id"],
+            },
+            follow_redirects=True,
+        )
+        assert b"revoked" in resp.data
+
+    def test_training_filter_by_area(self, client, faculty_seed):
+        faculty_login(client, "testfaculty", "pass")
+        resp = client.get(f"/faculty/training?area_id={faculty_seed['area_id']}")
+        assert resp.status_code == 200
+
+
+class TestFacultyMonitorManagement:
+    def test_monitors_page_requires_primary_admin(self, client, faculty_seed):
+        faculty_login(client, "testinstructor", "pass")
+        resp = client.get("/faculty/monitors", follow_redirects=True)
+        assert b"Primary admin access required" in resp.data
+
+    def test_monitors_page_loads_for_primary_admin(self, client, faculty_seed):
+        faculty_login(client, "testfaculty", "pass")
+        resp = client.get("/faculty/monitors")
+        assert resp.status_code == 200
+        assert b"Monitor Management" in resp.data
+
+    def test_add_monitor(self, client, faculty_seed):
+        faculty_login(client, "testfaculty", "pass")
+        resp = client.post(
+            "/faculty/monitors/add",
+            data={
+                "username": "newmon",
+                "display_name": "New Monitor",
+                "password": "testpass",
+                "area_ids": [faculty_seed["area_id"]],
+            },
+            follow_redirects=True,
+        )
+        assert b"New Monitor" in resp.data
+        assert Monitor.query.filter_by(username="newmon").first() is not None
+
+    def test_edit_monitor(self, client, faculty_seed):
+        faculty_login(client, "testfaculty", "pass")
+        resp = client.post(
+            f"/faculty/monitors/{faculty_seed['monitor_id']}/edit",
+            data={
+                "display_name": "Updated Monitor",
+                "area_ids": [faculty_seed["area_id"]],
+            },
+            follow_redirects=True,
+        )
+        assert b"Monitor updated" in resp.data
+
+    def test_faculty_accounts_page_loads(self, client, faculty_seed):
+        faculty_login(client, "testfaculty", "pass")
+        resp = client.get("/faculty/faculty-accounts")
+        assert resp.status_code == 200
+        assert b"Faculty Accounts" in resp.data
+
+    def test_add_faculty_account(self, client, faculty_seed):
+        faculty_login(client, "testfaculty", "pass")
+        resp = client.post(
+            "/faculty/faculty-accounts/add",
+            data={
+                "username": "newfac",
+                "display_name": "New Faculty",
+                "email": "newfac@appstate.edu",
+                "password": "testpass",
+            },
+            follow_redirects=True,
+        )
+        assert b"New Faculty" in resp.data
+        assert Faculty.query.filter_by(username="newfac").first() is not None

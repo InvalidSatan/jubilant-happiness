@@ -1,12 +1,12 @@
 {% extends "base.html" %}
-{% block title %}Sign In - Octagon Woodshop Log{% endblock %}
+{% block title %}Faculty Sign In - Octagon Woodshop Log{% endblock %}
 
 {% block content %}
 <div class="row justify-content-center">
     <div class="col-md-5">
         <div class="card">
             <div class="card-header">
-                <h4 class="mb-0">Monitor Sign In</h4>
+                <h4 class="mb-0">Faculty Sign In</h4>
             </div>
             <div class="card-body">
                 <form method="POST">
@@ -25,7 +25,7 @@
             </div>
             <div class="card-footer text-center">
                 <small class="text-muted">
-                    Faculty? <a href="{{ url_for('faculty.login') }}">Sign in here</a>
+                    Monitor? <a href="{{ url_for('auth.login') }}">Sign in here</a>
                 </small>
             </div>
         </div>
