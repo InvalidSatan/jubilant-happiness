@@ -68,6 +68,13 @@ class Monitor(UserMixin, db.Model):
         "ShopArea", secondary=monitor_areas, backref="monitors", lazy="select"
     )
 
+    @property
+    def user_type(self):
+        return "monitor"
+
+    def get_id(self):
+        return f"monitor:{self.id}"
+
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
 
@@ -76,6 +83,34 @@ class Monitor(UserMixin, db.Model):
 
     def __repr__(self):
         return f"<Monitor {self.username}>"
+
+
+class Faculty(UserMixin, db.Model):
+    """A faculty member who manages students and training certifications."""
+
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(64), unique=True, nullable=False)
+    display_name = db.Column(db.String(128), nullable=False)
+    email = db.Column(db.String(128), nullable=True)
+    password_hash = db.Column(db.String(256), nullable=False)
+    is_primary_admin = db.Column(db.Boolean, default=False)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+
+    @property
+    def user_type(self):
+        return "faculty"
+
+    def get_id(self):
+        return f"faculty:{self.id}"
+
+    def set_password(self, password):
+        self.password_hash = generate_password_hash(password)
+
+    def check_password(self, password):
+        return check_password_hash(self.password_hash, password)
+
+    def __repr__(self):
+        return f"<Faculty {self.username}>"
 
 
 class Student(db.Model):

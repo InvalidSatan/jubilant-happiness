@@ -55,6 +55,22 @@
             </button>
             <div class="collapse navbar-collapse" id="navContent">
                 <ul class="navbar-nav me-auto">
+                    {% if current_user.user_type == 'faculty' %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('faculty.dashboard') }}">Dashboard</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('faculty.students') }}">Students</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('faculty.training') }}">Training</a>
+                    </li>
+                    {% if current_user.is_primary_admin %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('faculty.monitors') }}">Monitors</a>
+                    </li>
+                    {% endif %}
+                    {% else %}
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('monitor.dashboard') }}">Dashboard</a>
                     </li>
@@ -72,11 +88,23 @@
                         <a class="nav-link" href="{{ url_for('reports.hub') }}">Reports</a>
                     </li>
                     {% endif %}
+                    {% endif %}
                 </ul>
-                <span class="navbar-text me-3">{{ current_user.display_name }}</span>
+                <span class="navbar-text me-3">
+                    {% if current_user.user_type == 'faculty' %}
+                    <span class="badge bg-info me-1">Faculty</span>
+                    {% endif %}
+                    {{ current_user.display_name }}
+                </span>
+                {% if current_user.user_type == 'faculty' %}
+                <a href="{{ url_for('faculty.logout') }}" class="btn btn-outline-light btn-sm">
+                    Sign Out
+                </a>
+                {% else %}
                 <a href="{{ url_for('auth.logout') }}" class="btn btn-outline-light btn-sm">
                     Sign Out
                 </a>
+                {% endif %}
             </div>
             {% endif %}
         </div>

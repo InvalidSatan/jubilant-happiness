@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Add Student - Octagon Woodshop Log{% endblock %}
+
+{% block content %}
+<h2>Add Student</h2>
+
+<div class="row">
+    <div class="col-md-6">
+        <form method="POST">
+            <div class="mb-3">
+                <label class="form-label">Banner ID</label>
+                <input type="text" name="student_id" class="form-control"
+                       placeholder="e.g. 900123456" required>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Full Name</label>
+                <input type="text" name="display_name" class="form-control" required>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Email (optional)</label>
+                <input type="email" name="email" class="form-control"
+                       placeholder="e.g. student@appstate.edu">
+            </div>
+            <button type="submit" class="btn btn-primary">Add Student</button>
+            <a href="{{ url_for('faculty.students') }}" class="btn btn-outline-secondary">Cancel</a>
+        </form>
+    </div>
+    <div class="col-md-6">
+        <div class="card bg-light">
+            <div class="card-body">
+                <h6>Need to add multiple students?</h6>
+                <p class="mb-2">Use the CSV upload to add students in bulk.</p>
+                <a href="{{ url_for('faculty.upload_students') }}" class="btn btn-outline-primary btn-sm">
+                    Upload CSV
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

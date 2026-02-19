@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}Training Certifications - Octagon Woodshop Log{% endblock %}
+
+{% block content %}
+<h2>Training Certifications</h2>
+
+<form method="GET" class="row mb-3 g-2">
+    <div class="col-md-3">
+        <select name="area_id" class="form-select">
+            <option value="">All Areas</option>
+            {% for area in areas %}
+            <option value="{{ area.id }}" {{ 'selected' if area.id == selected_area_id }}>
+                {{ area.name }}
+            </option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="col-md-4">
+        <input type="text" name="search" class="form-control"
+               placeholder="Search by Banner ID or name..." value="{{ search }}">
+    </div>
+    <div class="col-auto">
+        <button type="submit" class="btn btn-outline-secondary">Filter</button>
+        {% if selected_area_id or search %}
+        <a href="{{ url_for('faculty.training') }}" class="btn btn-outline-danger">Clear</a>
+        {% endif %}
+    </div>
+</form>
+
+{% if records %}
+<div class="card">
+    <table class="table table-hover mb-0">
+        <thead>
+            <tr>
+                <th>Student</th>
+                <th>Banner ID</th>
+                <th>Certification</th>
+                <th>Area</th>
+                <th>Semester</th>
+                <th>Source</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for rec in records %}
+            <tr>
+                <td>
+                    <a href="{{ url_for('faculty.student_detail', student_id=rec.student_id) }}">
+                        {{ rec.display_name }}
+                    </a>
+                </td>
+                <td><code>{{ rec.banner_id }}</code></td>
+                <td>{{ rec.equipment_name }}</td>
+                <td>{{ rec.area_name }}</td>
+                <td>
+                    {% if rec.certified_semester %}
+                    <span class="badge bg-success">{{ rec.certified_semester }}</span>
+                    {% else %}
+                    <span class="text-muted">—</span>
+                    {% endif %}
+                </td>
+                <td><small class="text-muted">{{ rec.source }}</small></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+<p class="text-muted mt-2">{{ records | length }} record(s) found.</p>
+{% else %}
+<div class="alert alert-info">
+    No training records found{% if selected_area_id or search %} matching your filters{% endif %}.
+</div>
+{% endif %}
+{% endblock %}
