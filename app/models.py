@@ -121,6 +121,15 @@ class Student(db.Model):
     display_name = db.Column(db.String(128), nullable=False)
     email = db.Column(db.String(128), nullable=True)
 
+    # Current enrollment term, e.g. "Fall 2026". Populated by the Banner sync
+    # job; used to decide whether a student is currently enrolled before
+    # honoring cached training records.
+    enrollment_term = db.Column(db.String(32), nullable=True)
+
+    # Canvas LMS user id (numeric string). Populated by Canvas sync; used to
+    # correlate Canvas course enrollments back to local students.
+    canvas_user_id = db.Column(db.String(32), nullable=True, index=True)
+
     # Private note only monitors see
     care_note = db.Column(db.Text, nullable=True)
 

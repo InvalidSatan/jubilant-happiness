@@ -1,5 +1,5 @@
 """
-Integration stubs for Banner SIS and ASULearn (Moodle).
+Integration stubs for Banner SIS, ASULearn (Moodle), and Canvas LMS.
 
 These provide the plumbing so that when API credentials are configured,
 the system can pull training/certification data automatically.
@@ -90,11 +90,50 @@ def fetch_asulearn_completions(student_email: str) -> list[dict]:
 
 
 # ---------------------------------------------------------------------------
+# Canvas LMS Integration
+# ---------------------------------------------------------------------------
+def fetch_canvas_enrollments(canvas_user_id: str) -> list[dict]:
+    """
+    Query Canvas for the courses a user is enrolled in.
+
+    Expected to return a list of dicts shaped like the Canvas API
+    `/users/:user_id/courses` response, minimally:
+        [{"id": 12345, "course_code": "ART 2210", "name": "Sculpture I"}, ...]
+
+    This is a STUB.  Replace once a Canvas API token is provisioned and the
+    course-code convention (SIS ID vs. `course_code`) is confirmed.
+    """
+    api_url = current_app.config.get("CANVAS_API_URL")
+    token = current_app.config.get("CANVAS_API_TOKEN")
+
+    if not api_url or not token:
+        log.warning("Canvas integration not configured; skipping.")
+        return []
+
+    if not canvas_user_id:
+        return []
+
+    try:
+        resp = requests.get(
+            f"{api_url}/users/{canvas_user_id}/courses",
+            headers={"Authorization": f"Bearer {token}"},
+            params={"enrollment_state": "active", "per_page": 100},
+            timeout=10,
+        )
+        resp.raise_for_status()
+        return resp.json()
+    except requests.RequestException as exc:
+        log.error("Canvas API request failed: %s", exc)
+        return []
+
+
+# ---------------------------------------------------------------------------
 # Manual sync endpoint (admin-triggered)
 # ---------------------------------------------------------------------------
 # Mapping from external course identifiers to equipment names.
 # Customize this as the department finalizes which courses map to which
-# pieces of equipment.
+# pieces of equipment.  The same map is consulted for Banner course codes,
+# ASULearn course names, and Canvas `course_code` values.
 COURSE_EQUIPMENT_MAP: dict[str, str] = {
     # "ART 2210": "MIG Welder",
     # "ART 2220": "Kiln",
@@ -106,8 +145,8 @@ COURSE_EQUIPMENT_MAP: dict[str, str] = {
 @login_required
 def sync_student(student_id):
     """
-    Pull the latest training data from Banner and ASULearn for one student
-    and update their local certifications.
+    Pull the latest training data from Banner, ASULearn, and Canvas for one
+    student and update their local certifications.
     """
     student = db.session.get(Student, student_id)
     if not student:
@@ -134,6 +173,18 @@ def sync_student(student_id):
             cname = record.get("course_name", "")
             if record.get("completed") and cname in COURSE_EQUIPMENT_MAP:
                 eq_name = COURSE_EQUIPMENT_MAP[cname]
+                eq = Equipment.query.filter_by(name=eq_name).first()
+                if eq and eq not in student.trained_equipment:
+                    student.trained_equipment.append(eq)
+                    added.append(eq_name)
+
+    # --- Canvas ---
+    if student.canvas_user_id:
+        canvas_data = fetch_canvas_enrollments(student.canvas_user_id)
+        for record in canvas_data:
+            code = record.get("course_code", "")
+            if code in COURSE_EQUIPMENT_MAP:
+                eq_name = COURSE_EQUIPMENT_MAP[code]
                 eq = Equipment.query.filter_by(name=eq_name).first()
                 if eq and eq not in student.trained_equipment:
                     student.trained_equipment.append(eq)
