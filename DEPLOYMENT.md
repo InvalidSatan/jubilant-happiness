@@ -240,12 +240,29 @@ PORT=8080
 WORKERS=2
 ```
 
-### 5b. Run the production seed
+### 5b. Apply migrations
 
-This creates the database tables, equipment certifications, and prompts you to set up real admin accounts (no sample/test data):
+Create (or upgrade) the schema via Flask-Migrate. This creates every table and seeds the five baseline shop areas:
 
 ```bash
 source venv/bin/activate
+export FLASK_APP=run.py
+flask db upgrade
+```
+
+**If this is an upgrade from a pre-migration deploy** (a deploy where the database was originally created via `db.create_all()` before `migrations/` landed in the repo), Alembic has no version record and will try to re-create existing tables. Stamp the database as already-at-head once, then run `upgrade` normally on future releases:
+
+```bash
+flask db stamp head
+# subsequent releases:
+flask db upgrade
+```
+
+### 5c. Run the production seed
+
+This creates equipment certifications and prompts you to set up real admin accounts (no sample/test data):
+
+```bash
 python seed_production.py
 ```
 
@@ -255,13 +272,15 @@ You will be prompted to create:
 
 > Use real names, real AppState emails, and strong passwords (8+ characters).
 
-### 5c. Verify tables were created
+### 5d. Verify tables were created
 
 ```bash
 psql -U woodshop -d woodshop_log -h 127.0.0.1 -c "\dt"
 ```
 
-You should see tables: `shop_area`, `equipment`, `monitor`, `faculty`, `student`, `warning`, `monitor_session`, `student_visit`, `monitor_areas`, `student_training`.
+You should see tables: `alembic_version`, `shop_area`, `equipment`, `monitor`, `faculty`, `student`, `warning`, `monitor_session`, `student_visit`, `monitor_areas`, `student_training`.
+
+The `alembic_version` table is maintained by Flask-Migrate and tracks which migration revision the database is currently at.
 
 ---
 
@@ -598,12 +617,16 @@ git pull origin master
 # Install any new dependencies
 pip install -r requirements.txt
 
+# Apply any new database migrations
+export FLASK_APP=run.py
+flask db upgrade
+
 # Restart the service
 exit
 sudo systemctl restart woodshop-log
 ```
 
-> The database tables are created via `db.create_all()`, which only adds new tables — it never drops or modifies existing ones. If a future update changes column types or adds columns to existing tables, a migration step will be documented in the release notes.
+> Schema changes are managed by Flask-Migrate (Alembic). Every release that touches the models ships a new file under `migrations/versions/`, and `flask db upgrade` applies any that haven't been run yet. You can preview what's pending with `flask db current` and `flask db history`.
 
 ### Monitoring health
 

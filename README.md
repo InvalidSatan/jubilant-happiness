@@ -106,30 +106,59 @@ SQLite is the default database and works well for a single-department deployment
 - Python 3.11 or later
 - pip
 
-### Quick Start
+### Quick Start (Linux / macOS)
 
 ```bash
 # Clone the repository
 git clone <repo-url>
 cd jubilant-happiness
 
-# Create a virtual environment (recommended)
-python -m venv venv
-source venv/bin/activate   # Linux/macOS
-# venv\Scripts\activate    # Windows
+# Create a virtual environment
+python -m venv .venv
+source .venv/bin/activate
 
 # Install dependencies
 pip install -r requirements.txt
 
-# Seed the database with sample data (monitors, equipment, students)
+# Create the SQLite instance dir, copy the env template
 mkdir -p instance
+cp .env.example .env
+# Edit .env as needed (dev default SECRET_KEY works fine)
+
+# Apply migrations to create the schema, then seed demo data
+export FLASK_APP=run.py
+flask db upgrade
 python seed.py
 
 # Start the development server
 python run.py
 ```
 
-The app will be running at **http://localhost:5000**.
+### Quick Start (Windows — Command Prompt)
+
+```cmd
+git clone <repo-url>
+cd jubilant-happiness
+
+python -m venv .venv
+.venv\Scripts\activate.bat
+
+pip install -r requirements.txt
+
+mkdir instance
+copy .env.example .env
+rem Edit .env in Notepad: `notepad .env`
+
+set FLASK_APP=run.py
+flask db upgrade
+python seed.py
+
+python run.py
+```
+
+(PowerShell: activate with `.venv\Scripts\Activate.ps1` and use `$env:FLASK_APP = "run.py"` instead of `set`.)
+
+The app will be running at **http://localhost:5000** (or the `PORT` you set in `.env`).
 
 ### Default Accounts (from seed.py)
 
@@ -150,15 +179,40 @@ pip install pytest
 python -m pytest tests/ -v
 ```
 
-All 27 tests should pass. The test suite uses an in-memory SQLite database and disables CSRF.
+All tests should pass. The test suite uses an in-memory SQLite database (bypassing migrations via `db.create_all()` in TESTING mode) and disables CSRF.
 
 ### Resetting the Database
 
 ```bash
 rm -f instance/woodshop.db
 mkdir -p instance
+flask db upgrade
 python seed.py
 ```
+
+On Windows Command Prompt:
+
+```cmd
+del instance\woodshop.db
+flask db upgrade
+python seed.py
+```
+
+### Applying New Migrations
+
+After pulling changes that modify the schema, run:
+
+```bash
+flask db upgrade
+```
+
+**If you have an existing pre-migration database** (created before `migrations/` was added to the repo), Alembic doesn't know what version it's at. Stamp it as up-to-date once, then future upgrades will work normally:
+
+```bash
+flask db stamp head
+```
+
+If your existing database is missing columns that the current code expects (e.g. `student.canvas_user_id`), the cleanest fix is to delete `instance/woodshop.db` and run `flask db upgrade && python seed.py` from scratch.
 
 ## Deploy to a Server
 

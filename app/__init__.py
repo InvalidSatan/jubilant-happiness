@@ -1,8 +1,10 @@
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager
+from flask_migrate import Migrate
 
 db = SQLAlchemy()
+migrate = Migrate()
 login_manager = LoginManager()
 login_manager.login_view = "auth.login"
 
@@ -21,6 +23,9 @@ def create_app(config_class=None):
         config_class.init_app(app)
 
     db.init_app(app)
+    # Import models before init_migrate so Alembic autogenerate sees them
+    from app import models  # noqa: F401
+    migrate.init_app(app, db)
     login_manager.init_app(app)
 
     from app.models import Monitor, Faculty
@@ -54,15 +59,19 @@ def create_app(config_class=None):
     app.register_blueprint(reports_bp, url_prefix="/admin/reports")
     app.register_blueprint(faculty_bp, url_prefix="/faculty")
 
-    with app.app_context():
-        db.create_all()
-        _seed_areas()
+    # In TESTING mode (in-memory SQLite), create schema directly and seed
+    # the baseline shop areas. In dev/prod, `flask db upgrade` handles the
+    # schema and the initial migration seeds the shop areas.
+    if app.config.get("TESTING"):
+        with app.app_context():
+            db.create_all()
+            _seed_areas()
 
     return app
 
 
 def _seed_areas():
-    """Ensure the five shop areas exist."""
+    """Ensure the five shop areas exist. Only used by the TESTING bootstrap."""
     from app.models import ShopArea
 
     area_names = ["Sculpture", "Ceramics", "Metal Smithing", "DigiLab", "Woodworking"]
