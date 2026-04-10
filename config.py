@@ -18,6 +18,10 @@ class Config:
     ASULEARN_API_URL = os.environ.get("ASULEARN_API_URL", "")
     ASULEARN_API_TOKEN = os.environ.get("ASULEARN_API_TOKEN", "")
 
+    # Canvas LMS integration
+    CANVAS_API_URL = os.environ.get("CANVAS_API_URL", "")
+    CANVAS_API_TOKEN = os.environ.get("CANVAS_API_TOKEN", "")
+
 
 class ProductionConfig(Config):
     """Production configuration for university network deployment."""
