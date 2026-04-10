@@ -19,7 +19,8 @@ def main():
     app = create_app()
 
     with app.app_context():
-        # Areas are auto-seeded by create_app, fetch them
+        # Areas are seeded by the initial migration (0001_initial_schema).
+        # Run `flask db upgrade` before this script if the tables don't exist.
         sculpture = ShopArea.query.filter_by(name="Sculpture").first()
         ceramics = ShopArea.query.filter_by(name="Ceramics").first()
         metal = ShopArea.query.filter_by(name="Metal Smithing").first()
