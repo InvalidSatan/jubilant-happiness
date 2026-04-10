@@ -18,19 +18,30 @@
     <div class="card-body">
         <form method="POST" action="{{ url_for('faculty.edit_student', student_id=student.id) }}">
             <div class="row">
-                <div class="col-md-4 mb-3">
+                <div class="col-md-3 mb-3">
                     <label class="form-label">Banner ID</label>
                     <input type="text" class="form-control" value="{{ student.student_id }}" disabled>
                 </div>
-                <div class="col-md-4 mb-3">
+                <div class="col-md-3 mb-3">
                     <label class="form-label">Display Name</label>
                     <input type="text" name="display_name" class="form-control"
                            value="{{ student.display_name }}" required>
                 </div>
-                <div class="col-md-4 mb-3">
+                <div class="col-md-3 mb-3">
                     <label class="form-label">Email</label>
                     <input type="email" name="email" class="form-control"
                            value="{{ student.email or '' }}">
+                </div>
+                <div class="col-md-3 mb-3">
+                    <label class="form-label">
+                        Canvas User ID
+                        <span class="text-muted small">(optional)</span>
+                    </label>
+                    <input type="text" name="canvas_user_id" class="form-control"
+                           value="{{ student.canvas_user_id or '' }}"
+                           placeholder="e.g. 123456"
+                           pattern="[0-9]*"
+                           inputmode="numeric">
                 </div>
             </div>
             <button type="submit" class="btn btn-outline-primary btn-sm">Update Info</button>

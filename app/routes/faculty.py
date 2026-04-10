@@ -149,6 +149,7 @@ def add_student():
         banner_id = request.form.get("student_id", "").strip()
         display_name = request.form.get("display_name", "").strip()
         email = request.form.get("email", "").strip() or None
+        canvas_user_id = request.form.get("canvas_user_id", "").strip() or None
 
         if not banner_id or not display_name:
             flash("Banner ID and name are required.", "danger")
@@ -158,7 +159,12 @@ def add_student():
             flash(f"A student with Banner ID {banner_id} already exists.", "warning")
             return render_template("faculty/add_student.html")
 
-        student = Student(student_id=banner_id, display_name=display_name, email=email)
+        student = Student(
+            student_id=banner_id,
+            display_name=display_name,
+            email=email,
+            canvas_user_id=canvas_user_id,
+        )
         db.session.add(student)
         db.session.commit()
         flash(f"Student {display_name} ({banner_id}) added.", "success")
@@ -200,6 +206,8 @@ def upload_students():
                 "display_name": "name",
                 "full_name": "name",
                 "student_name": "name",
+                "canvas_id": "canvas_user_id",
+                "canvas": "canvas_user_id",
             }
 
             available = set(reader.fieldnames)
@@ -222,6 +230,7 @@ def upload_students():
             banner_col = col_map.get("banner_id")
             name_col = col_map.get("name")
             email_col = col_map.get("email")
+            canvas_col = col_map.get("canvas_user_id")
 
             if not banner_col or not name_col:
                 flash(
@@ -239,6 +248,9 @@ def upload_students():
                 banner_id = row.get(banner_col, "").strip()
                 name = row.get(name_col, "").strip()
                 email = row.get(email_col, "").strip() if email_col else None
+                canvas_user_id = (
+                    row.get(canvas_col, "").strip() if canvas_col else None
+                )
 
                 if not banner_id or not name:
                     errors.append(f"Row {row_num}: missing banner_id or name")
@@ -252,6 +264,7 @@ def upload_students():
                     student_id=banner_id,
                     display_name=name,
                     email=email or None,
+                    canvas_user_id=canvas_user_id or None,
                 )
                 db.session.add(student)
                 added += 1
@@ -329,6 +342,7 @@ def edit_student(student_id):
 
     display_name = request.form.get("display_name", "").strip()
     email = request.form.get("email", "").strip() or None
+    canvas_user_id = request.form.get("canvas_user_id", "").strip() or None
 
     if not display_name:
         flash("Display name is required.", "danger")
@@ -336,6 +350,7 @@ def edit_student(student_id):
 
     student.display_name = display_name
     student.email = email
+    student.canvas_user_id = canvas_user_id
     db.session.commit()
     flash("Student information updated.", "success")
     return redirect(url_for("faculty.student_detail", student_id=student_id))

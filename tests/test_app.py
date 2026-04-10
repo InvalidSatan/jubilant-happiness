@@ -520,6 +520,80 @@ class TestFacultyStudentManagement:
         s = db.session.get(Student, faculty_seed["student_id"])
         assert s.display_name == "Updated Name"
 
+    def test_add_student_with_canvas_user_id(self, client, faculty_seed):
+        faculty_login(client, "testfaculty", "pass")
+        client.post(
+            "/faculty/students/add",
+            data={
+                "student_id": "900777000",
+                "display_name": "Canvas Linked",
+                "email": "cl@appstate.edu",
+                "canvas_user_id": "123456",
+            },
+            follow_redirects=True,
+        )
+        s = Student.query.filter_by(student_id="900777000").first()
+        assert s is not None
+        assert s.canvas_user_id == "123456"
+
+    def test_add_student_blank_canvas_id_stored_as_null(self, client, faculty_seed):
+        faculty_login(client, "testfaculty", "pass")
+        client.post(
+            "/faculty/students/add",
+            data={
+                "student_id": "900777001",
+                "display_name": "No Canvas",
+                "canvas_user_id": "",
+            },
+            follow_redirects=True,
+        )
+        s = Student.query.filter_by(student_id="900777001").first()
+        assert s is not None
+        assert s.canvas_user_id is None
+
+    def test_edit_student_sets_canvas_user_id(self, client, faculty_seed):
+        faculty_login(client, "testfaculty", "pass")
+        client.post(
+            f"/faculty/students/{faculty_seed['student_id']}/edit",
+            data={
+                "display_name": "Faculty Test Student",
+                "email": "ftest@appstate.edu",
+                "canvas_user_id": "987654",
+            },
+            follow_redirects=True,
+        )
+        s = db.session.get(Student, faculty_seed["student_id"])
+        assert s.canvas_user_id == "987654"
+
+    def test_edit_student_clears_canvas_user_id(self, client, faculty_seed):
+        faculty_login(client, "testfaculty", "pass")
+        # First set it
+        s = db.session.get(Student, faculty_seed["student_id"])
+        s.canvas_user_id = "555555"
+        db.session.commit()
+        # Then clear it via the form
+        client.post(
+            f"/faculty/students/{faculty_seed['student_id']}/edit",
+            data={
+                "display_name": "Faculty Test Student",
+                "email": "ftest@appstate.edu",
+                "canvas_user_id": "",
+            },
+            follow_redirects=True,
+        )
+        s = db.session.get(Student, faculty_seed["student_id"])
+        assert s.canvas_user_id is None
+
+    def test_student_detail_shows_canvas_user_id(self, client, faculty_seed):
+        faculty_login(client, "testfaculty", "pass")
+        s = db.session.get(Student, faculty_seed["student_id"])
+        s.canvas_user_id = "424242"
+        db.session.commit()
+        resp = client.get(f"/faculty/students/{faculty_seed['student_id']}")
+        assert resp.status_code == 200
+        assert b"424242" in resp.data
+        assert b"Canvas User ID" in resp.data
+
 
 class TestFacultyCSVUpload:
     def test_upload_page_loads(self, client, faculty_seed):
@@ -575,6 +649,46 @@ class TestFacultyCSVUpload:
             follow_redirects=True,
         )
         assert b"1 student(s) added" in resp.data
+
+    def test_csv_upload_with_canvas_user_id(self, client, faculty_seed):
+        faculty_login(client, "testfaculty", "pass")
+        csv_content = (
+            "banner_id,name,email,canvas_user_id\n"
+            "900222111,Canvas CSV,cc@appstate.edu,111222\n"
+            "900222112,No Canvas,nc@appstate.edu,\n"
+        )
+        import io
+        data = {
+            "csv_file": (io.BytesIO(csv_content.encode("utf-8")), "students.csv"),
+        }
+        resp = client.post(
+            "/faculty/students/upload",
+            data=data,
+            content_type="multipart/form-data",
+            follow_redirects=True,
+        )
+        assert b"2 student(s) added" in resp.data
+        linked = Student.query.filter_by(student_id="900222111").first()
+        unlinked = Student.query.filter_by(student_id="900222112").first()
+        assert linked.canvas_user_id == "111222"
+        assert unlinked.canvas_user_id is None
+
+    def test_csv_upload_canvas_id_alias(self, client, faculty_seed):
+        faculty_login(client, "testfaculty", "pass")
+        csv_content = "banner_id,name,canvas_id\n900222113,Alias Student,999888\n"
+        import io
+        data = {
+            "csv_file": (io.BytesIO(csv_content.encode("utf-8")), "students.csv"),
+        }
+        resp = client.post(
+            "/faculty/students/upload",
+            data=data,
+            content_type="multipart/form-data",
+            follow_redirects=True,
+        )
+        assert b"1 student(s) added" in resp.data
+        s = Student.query.filter_by(student_id="900222113").first()
+        assert s.canvas_user_id == "999888"
 
     def test_csv_upload_rejects_non_csv(self, client, faculty_seed):
         faculty_login(client, "testfaculty", "pass")

@@ -21,6 +21,17 @@
                 <input type="email" name="email" class="form-control"
                        placeholder="e.g. student@appstate.edu">
             </div>
+            <div class="mb-3">
+                <label class="form-label">Canvas User ID (optional)</label>
+                <input type="text" name="canvas_user_id" class="form-control"
+                       placeholder="e.g. 123456"
+                       pattern="[0-9]*"
+                       inputmode="numeric">
+                <div class="form-text">
+                    Numeric Canvas user id. Leave blank unless you're manually
+                    linking this student to Canvas for training sync.
+                </div>
+            </div>
             <button type="submit" class="btn btn-primary">Add Student</button>
             <a href="{{ url_for('faculty.students') }}" class="btn btn-outline-secondary">Cancel</a>
         </form>
