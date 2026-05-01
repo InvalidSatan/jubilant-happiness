@@ -132,6 +132,27 @@ class TestStudentSignIn:
         )
         assert b"signed in to Sculpture" in resp.data
 
+
+    def test_lookup_rejects_invalid_banner_id(self, client, seed):
+        login(client, "testmon", "pass")
+        client.post("/monitor/sign-in", data={"area_id": seed["area_id"]})
+
+        resp = client.post(
+            "/student/lookup",
+            data={"student_id": "abc123"},
+            follow_redirects=True,
+        )
+        assert b"Banner ID must be exactly 9 digits" in resp.data
+
+    def test_register_rejects_invalid_banner_id(self, client, seed):
+        login(client, "testmon", "pass")
+        resp = client.post(
+            "/student/register",
+            data={"student_id": "12345", "display_name": "New Student", "email": "n@appstate.edu"},
+            follow_redirects=True,
+        )
+        assert b"Banner ID must be exactly 9 digits" in resp.data
+
     def test_banned_student_cannot_sign_in(self, client, seed):
         login(client, "testmon", "pass")
         area_id = seed["area_id"]
@@ -228,6 +249,14 @@ class TestKiosk:
             data={"banner_id": seed["student_banner_id"]},
         )
         assert b"signed out" in resp.data
+
+
+    def test_kiosk_rejects_invalid_banner_id(self, client, seed):
+        login(client, "testmon", "pass")
+        client.post("/monitor/sign-in", data={"area_id": seed["area_id"]})
+
+        resp = client.post("/kiosk/scan", data={"banner_id": "12ab"})
+        assert b"Banner ID must be exactly 9 digits" in resp.data
 
     def test_kiosk_unknown_student(self, client, seed):
         login(client, "testmon", "pass")

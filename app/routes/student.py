@@ -12,6 +12,7 @@ from app.models import (
     Equipment,
     student_training,
 )
+from app.utils import is_valid_banner_id
 
 student_bp = Blueprint("student", __name__)
 
@@ -30,6 +31,10 @@ def lookup():
 
     if request.method == "POST":
         student_id_input = request.form.get("student_id", "").strip()
+        if not is_valid_banner_id(student_id_input):
+            flash("Banner ID must be exactly 9 digits.", "danger")
+            return redirect(url_for("student.lookup"))
+
         student = Student.query.filter_by(student_id=student_id_input).first()
 
         if not student:
@@ -64,6 +69,10 @@ def register():
 
         if not sid or not name:
             flash("Student ID and name are required.", "danger")
+            return render_template("student/register.html", prefill_id=sid)
+
+        if not is_valid_banner_id(sid):
+            flash("Banner ID must be exactly 9 digits.", "danger")
             return render_template("student/register.html", prefill_id=sid)
 
         if Student.query.filter_by(student_id=sid).first():
