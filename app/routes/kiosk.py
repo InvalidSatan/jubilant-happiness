@@ -9,6 +9,7 @@ from app.models import (
     StudentVisit,
     MonitorSession,
 )
+from app.utils import is_valid_banner_id
 
 kiosk_bp = Blueprint("kiosk", __name__)
 
@@ -53,6 +54,14 @@ def scan():
             "kiosk/index.html",
             area=area,
             result={"type": "error", "message": "Please enter a Banner ID."},
+            visitor_count=_visitor_count(area.id),
+        )
+
+    if not is_valid_banner_id(banner_id):
+        return render_template(
+            "kiosk/index.html",
+            area=area,
+            result={"type": "error", "message": "Banner ID must be exactly 9 digits."},
             visitor_count=_visitor_count(area.id),
         )
 
