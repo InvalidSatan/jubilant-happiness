@@ -109,17 +109,22 @@
 
 {# --- Quick links --- #}
 <div class="row">
-    <div class="col-md-4">
+    <div class="col-md-3">
+        <a href="{{ url_for('admin.live') }}" class="btn btn-outline-success w-100 mb-2">
+            Who's in the Shop
+        </a>
+    </div>
+    <div class="col-md-3">
         <a href="{{ url_for('admin.equipment') }}" class="btn btn-outline-primary w-100 mb-2">
             Manage Equipment
         </a>
     </div>
-    <div class="col-md-4">
+    <div class="col-md-3">
         <a href="{{ url_for('admin.warnings') }}" class="btn btn-outline-warning w-100 mb-2">
             View All Warnings
         </a>
     </div>
-    <div class="col-md-4">
+    <div class="col-md-3">
         <a href="{{ url_for('reports.hub') }}" class="btn btn-outline-secondary w-100 mb-2">
             View Reports
         </a>

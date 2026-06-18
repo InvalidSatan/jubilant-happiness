@@ -10,8 +10,10 @@ from flask import (
     url_for,
     flash,
     request,
+    Response,
 )
 from flask_login import login_user, logout_user, login_required, current_user
+from sqlalchemy import func
 
 from app import db
 from app.models import (
@@ -20,10 +22,11 @@ from app.models import (
     Student,
     ShopArea,
     Equipment,
+    Warning,
     student_training,
     monitor_areas,
 )
-from app.routes import is_safe_redirect_url
+from app.routes import is_safe_redirect_url, get_live_shop_state
 from app.utils import is_valid_banner_id
 
 faculty_bp = Blueprint("faculty", __name__)
@@ -145,6 +148,21 @@ def dashboard():
     )
 
 
+@faculty_bp.route("/live")
+@faculty_required
+def live():
+    """Department-wide view of who is currently in each shop area."""
+    shop_state = get_live_shop_state()
+    total_students = sum(len(a["visits"]) for a in shop_state)
+    total_monitors = sum(len(a["monitors"]) for a in shop_state)
+    return render_template(
+        "live_shop.html",
+        shop_state=shop_state,
+        total_students=total_students,
+        total_monitors=total_monitors,
+    )
+
+
 # ---------------------------------------------------------------------------
 # Student management
 # ---------------------------------------------------------------------------
@@ -167,6 +185,55 @@ def students():
         "faculty/students.html",
         students=students_list,
         search=search,
+    )
+
+
+@faculty_bp.route("/students/export")
+@faculty_required
+def export_students():
+    """Export the (optionally filtered) student roster as CSV."""
+    search = request.args.get("search", "").strip()
+    query = Student.query
+    if search:
+        query = query.filter(
+            db.or_(
+                Student.student_id.ilike(f"%{search}%"),
+                Student.display_name.ilike(f"%{search}%"),
+                Student.email.ilike(f"%{search}%"),
+            )
+        )
+    students_list = query.order_by(Student.display_name).all()
+
+    # Active-warning counts in a single grouped query (avoid N+1 per student).
+    warn_counts = dict(
+        db.session.query(Warning.student_id, func.count(Warning.id))
+        .filter(Warning.resolved.is_(False))
+        .group_by(Warning.student_id)
+        .all()
+    )
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(
+        ["Banner ID", "Name", "Email", "Canvas User ID", "Enrollment Term",
+         "Active Warnings", "Banned"]
+    )
+    for s in students_list:
+        cnt = warn_counts.get(s.id, 0)
+        writer.writerow([
+            s.student_id,
+            s.display_name,
+            s.email or "",
+            s.canvas_user_id or "",
+            s.enrollment_term or "",
+            cnt,
+            "Yes" if cnt >= 3 else "No",
+        ])
+
+    return Response(
+        output.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": "attachment; filename=students.csv"},
     )
 
 
@@ -451,6 +518,62 @@ def training():
         areas=areas,
         selected_area_id=area_id,
         search=search,
+    )
+
+
+@faculty_bp.route("/training/export")
+@faculty_required
+def export_training():
+    """Export the (optionally filtered) training matrix as CSV."""
+    area_id = request.args.get("area_id", type=int)
+    search = request.args.get("search", "").strip()
+
+    query = (
+        db.session.query(
+            Student.student_id.label("banner_id"),
+            Student.display_name,
+            Equipment.name.label("equipment_name"),
+            ShopArea.name.label("area_name"),
+            student_training.c.certified_semester,
+            student_training.c.source,
+        )
+        .select_from(student_training)
+        .join(Student, Student.id == student_training.c.student_id)
+        .join(Equipment, Equipment.id == student_training.c.equipment_id)
+        .join(ShopArea, ShopArea.id == Equipment.area_id)
+    )
+    if area_id:
+        query = query.filter(Equipment.area_id == area_id)
+    if search:
+        query = query.filter(
+            db.or_(
+                Student.student_id.ilike(f"%{search}%"),
+                Student.display_name.ilike(f"%{search}%"),
+            )
+        )
+    records = query.order_by(
+        Student.display_name, ShopArea.name, Equipment.name
+    ).all()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(
+        ["Banner ID", "Name", "Certification", "Area", "Semester", "Source"]
+    )
+    for r in records:
+        writer.writerow([
+            r.banner_id,
+            r.display_name,
+            r.equipment_name,
+            r.area_name,
+            r.certified_semester or "",
+            r.source or "",
+        ])
+
+    return Response(
+        output.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": "attachment; filename=training_records.csv"},
     )
 
 

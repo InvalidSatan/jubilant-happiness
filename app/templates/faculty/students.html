@@ -7,6 +7,7 @@
     <div>
         <a href="{{ url_for('faculty.add_student') }}" class="btn btn-primary btn-sm">Add Student</a>
         <a href="{{ url_for('faculty.upload_students') }}" class="btn btn-outline-primary btn-sm">Upload CSV</a>
+        <a href="{{ url_for('faculty.export_students', search=search) }}" class="btn btn-outline-success btn-sm">Export CSV</a>
     </div>
 </div>
 

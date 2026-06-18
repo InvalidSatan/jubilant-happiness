@@ -19,6 +19,31 @@ def is_safe_redirect_url(target: str) -> bool:
     return test.scheme in ("http", "https") and urlparse(host_url).netloc == test.netloc
 
 
+def get_live_shop_state():
+    """Return per-area live occupancy: monitors on duty and students signed in.
+
+    Shared by the admin and faculty "who's in the shop right now" views.
+    """
+    from app.models import ShopArea, MonitorSession, StudentVisit
+
+    areas = ShopArea.query.order_by(ShopArea.name).all()
+    state = {a.id: {"area": a, "monitors": [], "visits": []} for a in areas}
+
+    for s in MonitorSession.query.filter_by(signed_out_at=None).all():
+        if s.area_id in state:
+            state[s.area_id]["monitors"].append(s)
+
+    for v in (
+        StudentVisit.query.filter_by(signed_out_at=None)
+        .order_by(StudentVisit.signed_in_at)
+        .all()
+    ):
+        if v.area_id in state:
+            state[v.area_id]["visits"].append(v)
+
+    return [state[a.id] for a in areas]
+
+
 def bounce_faculty_to_dashboard():
     """Blueprint ``before_request`` guard for the monitor-facing blueprints.
 

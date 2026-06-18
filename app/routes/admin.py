@@ -16,7 +16,7 @@ from app.models import (
     monitor_areas,
     student_training,
 )
-from app.routes import bounce_faculty_to_dashboard
+from app.routes import bounce_faculty_to_dashboard, get_live_shop_state
 
 admin_bp = Blueprint("admin", __name__)
 admin_bp.before_request(bounce_faculty_to_dashboard)
@@ -58,6 +58,21 @@ def index():
         active_monitor_sessions=active_monitor_sessions,
         active_student_visits=active_student_visits,
         integrations=integration_status(),
+    )
+
+
+@admin_bp.route("/live")
+@admin_required
+def live():
+    """Department-wide view of who is currently in each shop area."""
+    shop_state = get_live_shop_state()
+    total_students = sum(len(a["visits"]) for a in shop_state)
+    total_monitors = sum(len(a["monitors"]) for a in shop_state)
+    return render_template(
+        "live_shop.html",
+        shop_state=shop_state,
+        total_students=total_students,
+        total_monitors=total_monitors,
     )
 
 

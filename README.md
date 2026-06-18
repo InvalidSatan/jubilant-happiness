@@ -76,6 +76,10 @@ The Art Department operates five shared shop areas — **Sculpture**, **Ceramics
 - **Safety & Warnings** — Strike counts, per-area breakdown, currently banned students.
 - All reports support **date range** and **area** filtering.
 - One-click **CSV export** for each report.
+- **Live "Who's in the Shop" view** — real-time occupancy across all areas
+  (monitors on duty + students signed in), available to admins and faculty.
+- **Faculty CSV exports** — the student roster and the full training matrix
+  (honoring the on-screen search/area filters).
 
 ### Admin Panel
 - Create and edit monitor accounts, assign area authorizations.
@@ -511,7 +515,7 @@ pip install pytest
 python -m pytest tests/ -v
 ```
 
-The test suite (110 tests) covers:
+The test suite (117 tests) covers:
 
 - Authentication (login, logout, redirects)
 - Monitor area sign-in / sign-out
@@ -564,7 +568,8 @@ the protection is active.
 │   ├── test_display.py          # Local-timezone formatting, warning area list
 │   ├── test_account.py          # Self-service password change
 │   ├── test_equipment.py        # Admin equipment edit/delete
-│   └── test_health_errors.py    # /healthz probe and custom error pages
+│   ├── test_health_errors.py    # /healthz probe and custom error pages
+│   └── test_views.py            # Live shop roster + faculty CSV exports
 ├── config.py                    # App configuration (dev + production)
 ├── requirements.txt             # Python dependencies
 ├── run.py                       # Dev server entry point
