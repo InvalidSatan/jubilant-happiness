@@ -10,6 +10,19 @@ class Config:
     )
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
+    # --- Security: session cookies ---
+    # HttpOnly stops JS from reading the session cookie; SameSite=Lax blocks the
+    # cookie on cross-site POSTs (defense in depth alongside CSRF tokens).
+    # SESSION_COOKIE_SECURE is enabled in ProductionConfig (requires HTTPS).
+    SESSION_COOKIE_HTTPONLY = True
+    SESSION_COOKIE_SAMESITE = "Lax"
+
+    # --- CSRF (Flask-WTF) ---
+    # Tokens are valid for the life of the session rather than expiring after an
+    # hour. The kiosk and monitor dashboard are routinely left open all shift, so
+    # a 1-hour token limit would cause spurious "CSRF token expired" failures.
+    WTF_CSRF_TIME_LIMIT = None
+
     # Banner SIS integration
     BANNER_API_URL = os.environ.get("BANNER_API_URL", "")
     BANNER_API_KEY = os.environ.get("BANNER_API_KEY", "")
@@ -33,6 +46,10 @@ class ProductionConfig(Config):
     # Proxy support — trust X-Forwarded-* headers from reverse proxy
     PREFERRED_URL_SCHEME = "https"
 
+    # Only send the session cookie over HTTPS. Safe because production runs
+    # behind the TLS-terminating reverse proxy documented in DEPLOYMENT.md.
+    SESSION_COOKIE_SECURE = True
+
     # PostgreSQL connection-pool tuning (via SQLAlchemy)
     SQLALCHEMY_ENGINE_OPTIONS = {
         "pool_size": int(os.environ.get("DB_POOL_SIZE", "5")),
@@ -48,6 +65,15 @@ class ProductionConfig(Config):
             raise RuntimeError(
                 "SECRET_KEY environment variable must be set for production."
             )
+
+        # Trust the reverse proxy's X-Forwarded-* headers so url_for(_external),
+        # request.is_secure, and Secure-cookie handling reflect the real HTTPS
+        # request rather than the internal HTTP hop to gunicorn.
+        from werkzeug.middleware.proxy_fix import ProxyFix
+
+        app.wsgi_app = ProxyFix(
+            app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1
+        )
 
         db_url = app.config.get("SQLALCHEMY_DATABASE_URI", "")
         if "sqlite" in db_url:

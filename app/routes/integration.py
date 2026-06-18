@@ -13,9 +13,27 @@ from flask_login import login_required
 
 from app import db
 from app.models import Student, Equipment
+from app.routes import bounce_faculty_to_dashboard
 
 integration_bp = Blueprint("integration", __name__)
+integration_bp.before_request(bounce_faculty_to_dashboard)
 log = logging.getLogger(__name__)
+
+
+def integration_status() -> dict[str, bool]:
+    """Return whether each external integration has the credentials it needs.
+
+    Used by the admin dashboard so staff can confirm at a glance that, e.g.,
+    Canvas is wired up before relying on the sync.
+    """
+    cfg = current_app.config
+    return {
+        "Banner SIS": bool(cfg.get("BANNER_API_URL") and cfg.get("BANNER_API_KEY")),
+        "ASULearn (Moodle)": bool(
+            cfg.get("ASULEARN_API_URL") and cfg.get("ASULEARN_API_TOKEN")
+        ),
+        "Canvas LMS": bool(cfg.get("CANVAS_API_URL") and cfg.get("CANVAS_API_TOKEN")),
+    }
 
 
 # ---------------------------------------------------------------------------

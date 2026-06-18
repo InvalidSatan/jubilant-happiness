@@ -17,6 +17,7 @@
     <div class="card-header">Student Information</div>
     <div class="card-body">
         <form method="POST" action="{{ url_for('faculty.edit_student', student_id=student.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div class="row">
                 <div class="col-md-3 mb-3">
                     <label class="form-label">Banner ID</label>
@@ -72,6 +73,7 @@
                         <td><span class="text-muted">{{ rec.area_name }}</span></td>
                         <td>
                             <form method="POST" action="{{ url_for('faculty.update_training') }}" class="d-inline">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                 <input type="hidden" name="student_id" value="{{ student.id }}">
                                 <input type="hidden" name="equipment_id" value="{{ rec.equipment_id }}">
                                 <div class="input-group input-group-sm" style="width: 200px;">
@@ -87,6 +89,7 @@
                         <td>
                             <form method="POST" action="{{ url_for('faculty.revoke_training') }}"
                                   onsubmit="return confirm('Revoke this training?');">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                 <input type="hidden" name="student_id" value="{{ student.id }}">
                                 <input type="hidden" name="equipment_id" value="{{ rec.equipment_id }}">
                                 <button type="submit" class="btn btn-outline-danger btn-sm">Revoke</button>
@@ -110,6 +113,7 @@
             <div class="card-header">Grant Training</div>
             <div class="card-body">
                 <form method="POST" action="{{ url_for('faculty.grant_training') }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <input type="hidden" name="student_id" value="{{ student.id }}">
                     <div class="mb-3">
                         <label class="form-label">Equipment / Certification</label>

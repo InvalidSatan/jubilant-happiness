@@ -23,6 +23,8 @@ from app.models import (
     student_training,
     monitor_areas,
 )
+from app.routes import is_safe_redirect_url
+from app.utils import is_valid_banner_id
 
 faculty_bp = Blueprint("faculty", __name__)
 
@@ -76,7 +78,9 @@ def login():
         if faculty and faculty.check_password(password):
             login_user(faculty)
             next_page = request.args.get("next")
-            return redirect(next_page or url_for("faculty.dashboard"))
+            if next_page and is_safe_redirect_url(next_page):
+                return redirect(next_page)
+            return redirect(url_for("faculty.dashboard"))
 
         flash("Invalid username or password.", "danger")
 
@@ -153,6 +157,10 @@ def add_student():
 
         if not banner_id or not display_name:
             flash("Banner ID and name are required.", "danger")
+            return render_template("faculty/add_student.html")
+
+        if not is_valid_banner_id(banner_id):
+            flash("Banner ID must be exactly 9 digits.", "danger")
             return render_template("faculty/add_student.html")
 
         if Student.query.filter_by(student_id=banner_id).first():
@@ -243,21 +251,37 @@ def upload_students():
             added = 0
             skipped = 0
             errors = []
+            seen_ids = set()  # Banner IDs already handled in THIS file
 
             for row_num, row in enumerate(reader, start=2):
-                banner_id = row.get(banner_col, "").strip()
-                name = row.get(name_col, "").strip()
-                email = row.get(email_col, "").strip() if email_col else None
+                banner_id = (row.get(banner_col) or "").strip()
+                name = (row.get(name_col) or "").strip()
+                email = (row.get(email_col) or "").strip() if email_col else None
                 canvas_user_id = (
-                    row.get(canvas_col, "").strip() if canvas_col else None
+                    (row.get(canvas_col) or "").strip() if canvas_col else None
                 )
 
                 if not banner_id or not name:
                     errors.append(f"Row {row_num}: missing banner_id or name")
                     continue
 
+                if not is_valid_banner_id(banner_id):
+                    errors.append(
+                        f"Row {row_num}: Banner ID '{banner_id}' must be exactly 9 digits"
+                    )
+                    continue
+
+                # Skip duplicates within the same file as well as against the DB.
+                # Without the in-batch check, two identical IDs both pass the DB
+                # lookup (neither is committed yet) and the final commit fails
+                # with an IntegrityError, discarding the entire upload.
+                if banner_id in seen_ids:
+                    skipped += 1
+                    continue
+
                 if Student.query.filter_by(student_id=banner_id).first():
                     skipped += 1
+                    seen_ids.add(banner_id)
                     continue
 
                 student = Student(
@@ -267,6 +291,7 @@ def upload_students():
                     canvas_user_id=canvas_user_id or None,
                 )
                 db.session.add(student)
+                seen_ids.add(banner_id)
                 added += 1
 
             db.session.commit()

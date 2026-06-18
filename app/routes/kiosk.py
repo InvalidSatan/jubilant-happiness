@@ -10,8 +10,10 @@ from app.models import (
     MonitorSession,
 )
 from app.utils import is_valid_banner_id
+from app.routes import bounce_faculty_to_dashboard
 
 kiosk_bp = Blueprint("kiosk", __name__)
+kiosk_bp.before_request(bounce_faculty_to_dashboard)
 
 
 @kiosk_bp.route("/")

@@ -17,8 +17,10 @@ from app.models import (
     Warning,
     Monitor,
 )
+from app.routes import bounce_faculty_to_dashboard
 
 reports_bp = Blueprint("reports", __name__)
+reports_bp.before_request(bounce_faculty_to_dashboard)
 
 
 def admin_required(f):
@@ -28,7 +30,7 @@ def admin_required(f):
     @wraps(f)
     @login_required
     def decorated(*args, **kwargs):
-        if not current_user.is_admin:
+        if not getattr(current_user, "is_admin", False):
             flash("Admin access required.", "danger")
             return redirect(url_for("monitor.dashboard"))
         return f(*args, **kwargs)

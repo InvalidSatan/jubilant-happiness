@@ -72,6 +72,32 @@
     </table>
 </div>
 
+{# --- External integration status --- #}
+<div class="card mb-4">
+    <div class="card-header">External Integrations</div>
+    <table class="table table-sm mb-0">
+        <tbody>
+            {% for name, configured in integrations.items() %}
+            <tr>
+                <td>{{ name }}</td>
+                <td class="text-end">
+                    {% if configured %}
+                    <span class="badge bg-success">Configured</span>
+                    {% else %}
+                    <span class="badge bg-secondary">Not configured</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    <div class="card-footer text-muted small">
+        Credentials are set via environment variables (see <code>.env.example</code>).
+        "Configured" only means a URL and token are present — use a student's
+        <em>Sync External</em> button to confirm live connectivity.
+    </div>
+</div>
+
 {# --- Quick links --- #}
 <div class="row">
     <div class="col-md-4">

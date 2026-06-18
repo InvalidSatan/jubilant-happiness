@@ -10,6 +10,7 @@
             <div class="card-header">Look Up Student</div>
             <div class="card-body">
                 <form method="POST">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <div class="mb-3">
                         <label for="student_id" class="form-label">Student ID (Banner ID)</label>
                         <input type="text" class="form-control form-control-lg"

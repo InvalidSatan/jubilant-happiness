@@ -3,21 +3,29 @@ from flask_login import login_user, logout_user, login_required, current_user
 
 from app import db
 from app.models import Monitor
+from app.routes import is_safe_redirect_url
 
 auth_bp = Blueprint("auth", __name__)
+
+
+def _home_for(user):
+    """Return the correct landing page for an authenticated user."""
+    if getattr(user, "user_type", None) == "faculty":
+        return url_for("faculty.dashboard")
+    return url_for("monitor.dashboard")
 
 
 @auth_bp.route("/")
 def index():
     if current_user.is_authenticated:
-        return redirect(url_for("monitor.dashboard"))
+        return redirect(_home_for(current_user))
     return redirect(url_for("auth.login"))
 
 
 @auth_bp.route("/login", methods=["GET", "POST"])
 def login():
     if current_user.is_authenticated:
-        return redirect(url_for("monitor.dashboard"))
+        return redirect(_home_for(current_user))
 
     if request.method == "POST":
         username = request.form.get("username", "").strip()
@@ -27,7 +35,9 @@ def login():
         if monitor and monitor.check_password(password):
             login_user(monitor)
             next_page = request.args.get("next")
-            return redirect(next_page or url_for("monitor.dashboard"))
+            if next_page and is_safe_redirect_url(next_page):
+                return redirect(next_page)
+            return redirect(url_for("monitor.dashboard"))
 
         flash("Invalid username or password.", "danger")
 

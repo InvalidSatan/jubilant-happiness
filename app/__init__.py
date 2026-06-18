@@ -1,12 +1,16 @@
+import os
+
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager
 from flask_migrate import Migrate
+from flask_wtf import CSRFProtect
 
 db = SQLAlchemy()
 migrate = Migrate()
 login_manager = LoginManager()
 login_manager.login_view = "auth.login"
+csrf = CSRFProtect()
 
 
 def create_app(config_class=None):
@@ -22,11 +26,15 @@ def create_app(config_class=None):
     if hasattr(config_class, "init_app") and callable(config_class.init_app):
         config_class.init_app(app)
 
+    # Ensure the SQLite instance directory exists before SQLAlchemy connects.
+    _ensure_sqlite_dir(app)
+
     db.init_app(app)
     # Import models before init_migrate so Alembic autogenerate sees them
     from app import models  # noqa: F401
     migrate.init_app(app, db)
     login_manager.init_app(app)
+    csrf.init_app(app)
 
     from app.models import Monitor, Faculty
 
@@ -68,6 +76,21 @@ def create_app(config_class=None):
             _seed_areas()
 
     return app
+
+
+def _ensure_sqlite_dir(app):
+    """Create the parent directory for a SQLite database file if it is missing.
+
+    Avoids a confusing 'unable to open database file' error on first run when
+    the ``instance/`` directory hasn't been created yet.
+    """
+    uri = app.config.get("SQLALCHEMY_DATABASE_URI", "")
+    prefix = "sqlite:///"
+    if uri.startswith(prefix):
+        db_path = uri[len(prefix):]
+        # Skip the special in-memory database used by the test suite.
+        if db_path and db_path != ":memory:":
+            os.makedirs(os.path.dirname(os.path.abspath(db_path)), exist_ok=True)
 
 
 def _seed_areas():

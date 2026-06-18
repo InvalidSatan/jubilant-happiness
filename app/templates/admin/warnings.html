@@ -39,6 +39,7 @@
                 {% if not w.resolved and current_user.is_admin %}
                 <form method="POST"
                       action="{{ url_for('admin.resolve_warning', warning_id=w.id) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button type="submit" class="btn btn-outline-success btn-sm">Resolve</button>
                 </form>
                 {% endif %}

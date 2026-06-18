@@ -13,8 +13,10 @@ from app.models import (
     student_training,
     Equipment,
 )
+from app.routes import bounce_faculty_to_dashboard
 
 monitor_bp = Blueprint("monitor", __name__)
+monitor_bp.before_request(bounce_faculty_to_dashboard)
 
 
 @monitor_bp.route("/dashboard")

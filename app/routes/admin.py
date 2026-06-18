@@ -16,15 +16,20 @@ from app.models import (
     monitor_areas,
     student_training,
 )
+from app.routes import bounce_faculty_to_dashboard
 
 admin_bp = Blueprint("admin", __name__)
+admin_bp.before_request(bounce_faculty_to_dashboard)
 
 
 def admin_required(f):
     @wraps(f)
     @login_required
     def decorated(*args, **kwargs):
-        if not current_user.is_admin:
+        # getattr guards against non-Monitor users (e.g. Faculty) that lack the
+        # is_admin attribute; the blueprint guard already redirects faculty, so
+        # this is belt-and-suspenders.
+        if not getattr(current_user, "is_admin", False):
             flash("Admin access required.", "danger")
             return redirect(url_for("monitor.dashboard"))
         return f(*args, **kwargs)
@@ -38,6 +43,8 @@ def admin_required(f):
 @admin_bp.route("/")
 @admin_required
 def index():
+    from app.routes.integration import integration_status
+
     monitors = Monitor.query.order_by(Monitor.display_name).all()
     areas = ShopArea.query.order_by(ShopArea.name).all()
     students_count = Student.query.count()
@@ -50,6 +57,7 @@ def index():
         students_count=students_count,
         active_monitor_sessions=active_monitor_sessions,
         active_student_visits=active_student_visits,
+        integrations=integration_status(),
     )
 
 
