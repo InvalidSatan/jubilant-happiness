@@ -35,6 +35,12 @@ class Config:
     CANVAS_API_URL = os.environ.get("CANVAS_API_URL", "")
     CANVAS_API_TOKEN = os.environ.get("CANVAS_API_TOKEN", "")
 
+    # Maps external course identifiers to equipment names, as a JSON object,
+    # e.g. '{"ART 2210": "MIG Welder", "SHOP_SAFETY_101": "Basic Woodshop"}'.
+    # Lets staff configure the Banner/ASULearn/Canvas course mapping without
+    # editing code; merged on top of the defaults in integration.py.
+    COURSE_EQUIPMENT_MAP_JSON = os.environ.get("COURSE_EQUIPMENT_MAP_JSON", "")
+
 
 class ProductionConfig(Config):
     """Production configuration for university network deployment."""

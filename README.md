@@ -446,14 +446,25 @@ configured.
   student detail page, the add-student form, or the `canvas_user_id` CSV
   column). The sync uses this to correlate Canvas enrollments back to the
   local student.
-- **Mapping:** Edit `COURSE_EQUIPMENT_MAP` in `integration.py` to map Canvas
-  course codes to equipment names. Until it is populated, syncing succeeds but
-  grants nothing.
+- **Mapping:** Set `COURSE_EQUIPMENT_MAP_JSON` (a JSON object) in the
+  environment to map Canvas `course_code` **or** `sis_course_id` values to
+  equipment names — no code edit required. Until it is populated, syncing
+  succeeds but grants nothing. The in-code `COURSE_EQUIPMENT_MAP` in
+  `integration.py` serves as a documented default/fallback.
+- **Pagination:** `fetch_canvas_enrollments` follows Canvas `Link` headers, so
+  students with more than one page of courses are handled correctly.
 
 ### Triggering a Sync
 
-Monitors can click **"Sync External"** on any student's detail page to pull the
-latest data from Banner, ASULearn, and Canvas for that student.
+- **One student:** Monitors click **"Sync External"** on a student's detail
+  page.
+- **Whole roster:** Admins click **"Sync All Students"** on the admin
+  dashboard's *External Integrations* panel — this syncs every student that has
+  a Canvas user id or email. Run it after linking a Canvas class.
+
+Synced certifications are tagged with their origin (`banner` / `asulearn` /
+`canvas`) rather than `manual`, so faculty can distinguish auto-granted training
+on the student detail page.
 
 ## Configuration
 
@@ -471,6 +482,7 @@ All configuration is in `config.py` and can be overridden via environment variab
 | `ASULEARN_API_TOKEN` | *(empty)* | Moodle Web Services token. |
 | `CANVAS_API_URL` | *(empty)* | Canvas API base URL (e.g. `https://appstate.instructure.com/api/v1`). |
 | `CANVAS_API_TOKEN` | *(empty)* | Canvas API access token. |
+| `COURSE_EQUIPMENT_MAP_JSON` | *(empty)* | JSON mapping of course identifiers → equipment names for auto-granting training. |
 
 ### Security notes
 
@@ -489,7 +501,7 @@ pip install pytest
 python -m pytest tests/ -v
 ```
 
-The test suite (78 tests) covers:
+The test suite (86 tests) covers:
 
 - Authentication (login, logout, redirects)
 - Monitor area sign-in / sign-out
@@ -501,6 +513,8 @@ The test suite (78 tests) covers:
 - Faculty portal (auth, student management, CSV upload, training, monitors)
 - Security (CSRF enforcement, open-redirect prevention, faculty/monitor
   cross-role isolation, Banner ID validation)
+- External training sync (course→equipment mapping, Canvas source tagging,
+  pagination, bulk "sync all")
 
 Most tests use an in-memory SQLite database and disable CSRF for convenience;
 `tests/test_security.py` runs a dedicated set with CSRF **enabled** to confirm
@@ -534,7 +548,8 @@ the protection is active.
 │       └── student/             # Lookup, registration, sign-in confirmation
 ├── tests/
 │   ├── test_app.py              # Functional tests (auth, sessions, kiosk, reports, faculty)
-│   └── test_security.py         # CSRF, open-redirect, cross-role isolation
+│   ├── test_security.py         # CSRF, open-redirect, cross-role isolation
+│   └── test_integration_sync.py # Banner/ASULearn/Canvas training sync
 ├── config.py                    # App configuration (dev + production)
 ├── requirements.txt             # Python dependencies
 ├── run.py                       # Dev server entry point

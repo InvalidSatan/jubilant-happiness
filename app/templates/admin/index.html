@@ -91,10 +91,19 @@
             {% endfor %}
         </tbody>
     </table>
-    <div class="card-footer text-muted small">
-        Credentials are set via environment variables (see <code>.env.example</code>).
-        "Configured" only means a URL and token are present — use a student's
-        <em>Sync External</em> button to confirm live connectivity.
+    <div class="card-footer d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <span class="text-muted small">
+            Credentials are set via environment variables (see <code>.env.example</code>).
+            "Configured" only means a URL and token are present — use a student's
+            <em>Sync External</em> button to confirm live connectivity.
+        </span>
+        <form method="POST" action="{{ url_for('integration.sync_all') }}"
+              onsubmit="return confirm('Pull external training for all linked students now?');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-outline-primary btn-sm">
+                Sync All Students
+            </button>
+        </form>
     </div>
 </div>
 
