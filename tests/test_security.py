@@ -58,8 +58,17 @@ class TestCsrf:
         assert _token(resp.get_data(as_text=True)) is not None
 
     def test_post_without_token_is_rejected(self, csrf_client):
+        # A missing token is rejected (the request is NOT processed) and the
+        # user gets a friendly redirect rather than a bare 400.
         resp = csrf_client.post("/login", data={"username": "mon", "password": "pw"})
-        assert resp.status_code == 400
+        assert resp.status_code == 302
+        followed = csrf_client.post(
+            "/login",
+            data={"username": "mon", "password": "pw"},
+            follow_redirects=True,
+        )
+        assert b"session expired or the form was invalid" in followed.data
+        assert b"Dashboard" not in followed.data  # not logged in
 
     def test_post_with_token_succeeds(self, csrf_client):
         token = _token(csrf_client.get("/login").get_data(as_text=True))

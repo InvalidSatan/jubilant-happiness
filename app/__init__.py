@@ -83,6 +83,9 @@ def create_app(config_class=None):
     app.register_blueprint(reports_bp, url_prefix="/admin/reports")
     app.register_blueprint(faculty_bp, url_prefix="/faculty")
 
+    _register_error_handlers(app)
+    _register_healthcheck(app)
+
     # In TESTING mode (in-memory SQLite), create schema directly and seed
     # the baseline shop areas. In dev/prod, `flask db upgrade` handles the
     # schema and the initial migration seeds the shop areas.
@@ -92,6 +95,51 @@ def create_app(config_class=None):
             _seed_areas()
 
     return app
+
+
+def _register_error_handlers(app):
+    """Friendly, styled error pages — and roll the DB session back on 500 so a
+    failed request can't poison the next one served by the same worker."""
+    from flask import render_template, redirect, request, url_for, flash
+    from flask_wtf.csrf import CSRFError
+
+    @app.errorhandler(403)
+    def forbidden(e):
+        return render_template("errors/403.html"), 403
+
+    @app.errorhandler(404)
+    def not_found(e):
+        return render_template("errors/404.html"), 404
+
+    @app.errorhandler(500)
+    def server_error(e):
+        db.session.rollback()
+        return render_template("errors/500.html"), 500
+
+    @app.errorhandler(CSRFError)
+    def handle_csrf_error(e):
+        # Usually a stale tab or an expired session, not an attack — guide the
+        # user to retry instead of showing a bare 400.
+        flash(
+            "Your session expired or the form was invalid. Please try again.",
+            "warning",
+        )
+        target = request.referrer if request.referrer else url_for("auth.login")
+        return redirect(target)
+
+
+def _register_healthcheck(app):
+    """Unauthenticated liveness/readiness probe for systemd or a load balancer."""
+    from flask import jsonify
+
+    @app.get("/healthz")
+    def healthz():
+        try:
+            db.session.execute(db.text("SELECT 1"))
+            return jsonify(status="ok"), 200
+        except Exception:  # pragma: no cover - only on a real DB outage
+            db.session.rollback()
+            return jsonify(status="error"), 503
 
 
 def _ensure_sqlite_dir(app):

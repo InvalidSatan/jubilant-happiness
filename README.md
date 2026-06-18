@@ -334,6 +334,10 @@ sudo systemctl start woodshop-log
 sudo systemctl status woodshop-log    # verify it's running
 ```
 
+The app exposes an unauthenticated **`GET /healthz`** endpoint that returns
+`{"status": "ok"}` (HTTP 200) when the app and database are reachable — point
+your uptime monitor or load-balancer health check at it.
+
 ### 6. Backups
 
 The SQLite database lives at `instance/woodshop.db`. Back it up regularly:
@@ -507,7 +511,7 @@ pip install pytest
 python -m pytest tests/ -v
 ```
 
-The test suite (107 tests) covers:
+The test suite (109 tests) covers:
 
 - Authentication (login, logout, redirects)
 - Monitor area sign-in / sign-out
@@ -559,7 +563,8 @@ the protection is active.
 │   ├── test_integration_sync.py # Banner/ASULearn/Canvas training sync
 │   ├── test_display.py          # Local-timezone formatting, warning area list
 │   ├── test_account.py          # Self-service password change
-│   └── test_equipment.py        # Admin equipment edit/delete
+│   ├── test_equipment.py        # Admin equipment edit/delete
+│   └── test_health_errors.py    # /healthz probe and custom error pages
 ├── config.py                    # App configuration (dev + production)
 ├── requirements.txt             # Python dependencies
 ├── run.py                       # Dev server entry point
