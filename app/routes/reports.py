@@ -257,9 +257,17 @@ def safety():
         else:
             area_counts[name]["active"] += 1
 
-    # Currently banned students
-    banned_students = Student.query.all()
-    banned_students = [s for s in banned_students if s.is_banned]
+    # Currently banned students (3+ active warnings). Done as a single grouped
+    # query rather than is_banned per student (which is one COUNT each — N+1).
+    banned_students = (
+        db.session.query(Student)
+        .join(Warning, Warning.student_id == Student.id)
+        .filter(Warning.resolved.is_(False))
+        .group_by(Student.id)
+        .having(func.count(Warning.id) >= 3)
+        .order_by(Student.display_name)
+        .all()
+    )
 
     return render_template(
         "admin/reports/safety.html",

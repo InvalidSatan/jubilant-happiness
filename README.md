@@ -511,7 +511,7 @@ pip install pytest
 python -m pytest tests/ -v
 ```
 
-The test suite (109 tests) covers:
+The test suite (110 tests) covers:
 
 - Authentication (login, logout, redirects)
 - Monitor area sign-in / sign-out
