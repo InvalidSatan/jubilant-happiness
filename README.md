@@ -76,13 +76,22 @@ The Art Department operates five shared shop areas — **Sculpture**, **Ceramics
 - **Safety & Warnings** — Strike counts, per-area breakdown, currently banned students.
 - All reports support **date range** and **area** filtering.
 - One-click **CSV export** for each report.
+- **Live "Who's in the Shop" view** — real-time occupancy across all areas
+  (monitors on duty + students signed in), available to admins and faculty.
+- **Faculty CSV exports** — the student roster and the full training matrix
+  (honoring the on-screen search/area filters).
 
 ### Admin Panel
 - Create and edit monitor accounts, assign area authorizations.
-- Manage equipment inventory per area.
+- Manage equipment inventory per area (add, edit, delete — deletion is blocked
+  while training records reference the item).
 - Grant or revoke student training certifications (with semester).
 - View and resolve all warnings.
 - Dashboard with real-time counts (monitors on duty, students signed in, etc.).
+- **External Integrations** status panel and a one-click **Sync All Students**.
+
+> Every signed-in user (monitor or faculty) can change their own password via
+> the **Account** link in the navbar — change the seed passwords on first login.
 
 ## Architecture
 
@@ -329,6 +338,10 @@ sudo systemctl start woodshop-log
 sudo systemctl status woodshop-log    # verify it's running
 ```
 
+The app exposes an unauthenticated **`GET /healthz`** endpoint that returns
+`{"status": "ok"}` (HTTP 200) when the app and database are reachable — point
+your uptime monitor or load-balancer health check at it.
+
 ### 6. Backups
 
 The SQLite database lives at `instance/woodshop.db`. Back it up regularly:
@@ -413,7 +426,11 @@ monitor_areas  ──M  Monitor                     Warning
 
 ## External Integrations
 
-The system includes integration stubs for two campus systems. These are located in `app/routes/integration.py`.
+The system includes integration stubs for three campus systems (Banner SIS,
+ASULearn/Moodle, and Canvas LMS). These are located in
+`app/routes/integration.py`. The admin dashboard shows a **External
+Integrations** panel indicating which ones currently have credentials
+configured.
 
 ### Banner SIS
 
@@ -428,9 +445,39 @@ The system includes integration stubs for two campus systems. These are located 
 - **Status:** Stub implemented. Deferred until new LMS is adopted (summer transition).
 - **Config:** Set `ASULEARN_API_URL` and `ASULEARN_API_TOKEN` in `.env`.
 
+### Canvas LMS
+
+- **Purpose:** Pull a student's active course enrollments to auto-grant
+  equipment training certifications.
+- **Status:** Stub implemented (`fetch_canvas_enrollments`). Requires a Canvas
+  API token and confirmation of the course-code convention (`course_code` vs.
+  SIS id).
+- **Config:** Set `CANVAS_API_URL` (e.g. `https://appstate.instructure.com/api/v1`)
+  and `CANVAS_API_TOKEN` in `.env`. Generate the token under
+  *Canvas > Account > Settings > Approved Integrations*.
+- **Linking students:** Set each student's numeric **Canvas User ID** (faculty
+  student detail page, the add-student form, or the `canvas_user_id` CSV
+  column). The sync uses this to correlate Canvas enrollments back to the
+  local student.
+- **Mapping:** Set `COURSE_EQUIPMENT_MAP_JSON` (a JSON object) in the
+  environment to map Canvas `course_code` **or** `sis_course_id` values to
+  equipment names — no code edit required. Until it is populated, syncing
+  succeeds but grants nothing. The in-code `COURSE_EQUIPMENT_MAP` in
+  `integration.py` serves as a documented default/fallback.
+- **Pagination:** `fetch_canvas_enrollments` follows Canvas `Link` headers, so
+  students with more than one page of courses are handled correctly.
+
 ### Triggering a Sync
 
-Monitors can click **"Sync External"** on any student's detail page to pull the latest data from both systems for that student.
+- **One student:** Monitors click **"Sync External"** on a student's detail
+  page.
+- **Whole roster:** Admins click **"Sync All Students"** on the admin
+  dashboard's *External Integrations* panel — this syncs every student that has
+  a Canvas user id or email. Run it after linking a Canvas class.
+
+Synced certifications are tagged with their origin (`banner` / `asulearn` /
+`canvas`) rather than `manual`, so faculty can distinguish auto-granted training
+on the student detail page.
 
 ## Configuration
 
@@ -440,12 +487,26 @@ All configuration is in `config.py` and can be overridden via environment variab
 |---|---|---|
 | `SECRET_KEY` | `dev-key-change-in-production` | Flask session secret. **Must** be set in production. |
 | `DATABASE_URL` | `sqlite:///instance/woodshop.db` | SQLAlchemy database URI. |
+| `DISPLAY_TIMEZONE` | `America/New_York` | IANA timezone for displaying timestamps (stored in UTC). |
 | `PORT` | `8080` | Server port (used by `start.sh`). |
 | `WORKERS` | `2` | Gunicorn worker count (used by `start.sh`). |
 | `BANNER_API_URL` | *(empty)* | Banner SIS API base URL. |
 | `BANNER_API_KEY` | *(empty)* | Bearer token for Banner API. |
 | `ASULEARN_API_URL` | *(empty)* | ASULearn Moodle Web Services endpoint. |
 | `ASULEARN_API_TOKEN` | *(empty)* | Moodle Web Services token. |
+| `CANVAS_API_URL` | *(empty)* | Canvas API base URL (e.g. `https://appstate.instructure.com/api/v1`). |
+| `CANVAS_API_TOKEN` | *(empty)* | Canvas API access token. |
+| `COURSE_EQUIPMENT_MAP_JSON` | *(empty)* | JSON mapping of course identifiers → equipment names for auto-granting training. |
+
+### Security notes
+
+- **CSRF protection** is enabled globally (Flask-WTF `CSRFProtect`); every form
+  POST carries a token. The test suite disables it via `WTF_CSRF_ENABLED = False`.
+- In **production** (`ProductionConfig`), the session cookie is marked
+  `Secure` + `HttpOnly` + `SameSite=Lax`, and `ProxyFix` is applied so the app
+  honors the reverse proxy's `X-Forwarded-*` headers. If you later embed the
+  tool inside a Canvas iframe, you will need `SESSION_COOKIE_SAMESITE = "None"`
+  (which requires HTTPS) so the session cookie survives the third-party frame.
 
 ## Testing
 
@@ -454,7 +515,7 @@ pip install pytest
 python -m pytest tests/ -v
 ```
 
-The test suite (27 tests) covers:
+The test suite (117 tests) covers:
 
 - Authentication (login, logout, redirects)
 - Monitor area sign-in / sign-out
@@ -463,8 +524,16 @@ The test suite (27 tests) covers:
 - Warning issuance and accumulation
 - Kiosk mode (scan sign-in, auto sign-out, unknown/banned students)
 - Reports (admin access control, all 3 reports, CSV exports, filters)
+- Faculty portal (auth, student management, CSV upload, training, monitors)
+- Security (CSRF enforcement, open-redirect prevention, faculty/monitor
+  cross-role isolation, Banner ID validation)
+- External training sync (course→equipment mapping, Canvas source tagging,
+  pagination, bulk "sync all")
+- Local-timezone display conversion and the issue-warning area list
 
-Tests use an in-memory SQLite database and disable CSRF for convenience.
+Most tests use an in-memory SQLite database and disable CSRF for convenience;
+`tests/test_security.py` runs a dedicated set with CSRF **enabled** to confirm
+the protection is active.
 
 ## Project Structure
 
@@ -474,9 +543,11 @@ Tests use an in-memory SQLite database and disable CSRF for convenience.
 │   ├── __init__.py              # App factory, DB init, area seeding
 │   ├── models.py                # All SQLAlchemy models
 │   ├── routes/
+│   │   ├── __init__.py          # Shared route helpers (safe redirect, faculty guard)
 │   │   ├── admin.py             # Admin panel (monitors, equipment, warnings)
 │   │   ├── auth.py              # Login / logout
-│   │   ├── integration.py       # Banner & ASULearn sync stubs
+│   │   ├── faculty.py           # Faculty portal (students, training, CSV, monitors)
+│   │   ├── integration.py       # Banner / ASULearn / Canvas sync stubs
 │   │   ├── kiosk.py             # Kiosk mode (tablet self-service UI)
 │   │   ├── monitor.py           # Monitor dashboard, sessions, student detail
 │   │   ├── reports.py           # Reporting (visits, coverage, safety) + CSV export
@@ -486,11 +557,19 @@ Tests use an in-memory SQLite database and disable CSRF for convenience.
 │       ├── admin/               # Admin panel templates
 │       │   └── reports/         # Report hub, visits, coverage, safety templates
 │       ├── auth/                # Login page
+│       ├── faculty/             # Faculty portal templates
 │       ├── kiosk/               # Full-screen kiosk interface
 │       ├── monitor/             # Dashboard, student detail, session history
 │       └── student/             # Lookup, registration, sign-in confirmation
 ├── tests/
-│   └── test_app.py              # 27 tests (auth, sessions, kiosk, reports)
+│   ├── test_app.py              # Functional tests (auth, sessions, kiosk, reports, faculty)
+│   ├── test_security.py         # CSRF, open-redirect, cross-role isolation
+│   ├── test_integration_sync.py # Banner/ASULearn/Canvas training sync
+│   ├── test_display.py          # Local-timezone formatting, warning area list
+│   ├── test_account.py          # Self-service password change
+│   ├── test_equipment.py        # Admin equipment edit/delete
+│   ├── test_health_errors.py    # /healthz probe and custom error pages
+│   └── test_views.py            # Live shop roster + faculty CSV exports
 ├── config.py                    # App configuration (dev + production)
 ├── requirements.txt             # Python dependencies
 ├── run.py                       # Dev server entry point

@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}In the Shop - Octagon Woodshop Log{% endblock %}
+
+{% block content %}
+{% set is_faculty = current_user.user_type == 'faculty' %}
+{% set detail_ep = 'faculty.student_detail' if is_faculty else 'monitor.student_detail' %}
+
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h2 class="mb-0">Currently in the Shop</h2>
+    <div class="text-muted">
+        <span class="badge bg-success">{{ total_students }}</span> student{{ 's' if total_students != 1 }} &middot;
+        <span class="badge bg-secondary">{{ total_monitors }}</span> monitor{{ 's' if total_monitors != 1 }} on duty
+        <a href="{{ url_for('faculty.live' if is_faculty else 'admin.live') }}"
+           class="btn btn-outline-secondary btn-sm ms-2" title="Refresh">Refresh</a>
+    </div>
+</div>
+
+<div class="row">
+    {% for area in shop_state %}
+    <div class="col-lg-6 mb-4">
+        <div class="card h-100">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <strong>{{ area.area.name }}</strong>
+                <span>
+                    {% if area.monitors %}
+                        {% for s in area.monitors %}
+                        <span class="badge bg-success" title="On duty since {{ s.signed_in_at | localdt('%I:%M %p') }}">
+                            {{ s.monitor.display_name }}
+                        </span>
+                        {% endfor %}
+                    {% else %}
+                        <span class="badge bg-warning text-dark">No monitor on duty</span>
+                    {% endif %}
+                </span>
+            </div>
+            {% if area.visits %}
+            <table class="table table-sm table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr><th>Student</th><th>ID</th><th>Since</th><th>Strikes</th></tr>
+                </thead>
+                <tbody>
+                    {% for v in area.visits %}
+                    <tr>
+                        <td>
+                            <a href="{{ url_for(detail_ep, student_id=v.student.id) }}">
+                                {{ v.student.display_name }}
+                            </a>
+                            {% if v.student.care_note and not is_faculty %}
+                            <span class="badge bg-info text-dark" title="{{ v.student.care_note }}">note</span>
+                            {% endif %}
+                        </td>
+                        <td><code>{{ v.student.student_id }}</code></td>
+                        <td>{{ v.signed_in_at | localdt('%I:%M %p') }}</td>
+                        <td>
+                            {% set wcount = v.student.active_warnings_count %}
+                            <span class="strike-indicators">
+                                <span class="strike-dot {{ 'strike-1' if wcount >= 1 else 'empty' }}">1st</span>
+                                <span class="strike-dot {{ 'strike-2' if wcount >= 2 else 'empty' }}">2nd</span>
+                                <span class="strike-dot {{ 'strike-3' if wcount >= 3 else 'empty' }}">3rd</span>
+                            </span>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <div class="card-body text-muted">No students signed in.</div>
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}

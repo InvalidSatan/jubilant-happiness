@@ -24,6 +24,8 @@
         {% if selected_area_id or search %}
         <a href="{{ url_for('faculty.training') }}" class="btn btn-outline-danger">Clear</a>
         {% endif %}
+        <a href="{{ url_for('faculty.export_training', area_id=selected_area_id, search=search) }}"
+           class="btn btn-outline-success">Export CSV</a>
     </div>
 </form>
 

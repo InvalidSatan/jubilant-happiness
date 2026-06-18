@@ -10,9 +10,10 @@
     <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
         <span>
             On Duty: <strong>{{ active_session.area.name }}</strong>
-            &mdash; since {{ active_session.signed_in_at.strftime('%I:%M %p') }}
+            &mdash; since {{ active_session.signed_in_at | localdt('%I:%M %p') }}
         </span>
         <form method="POST" action="{{ url_for('monitor.sign_out') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button class="btn btn-outline-light btn-sm" type="submit">End Shift</button>
         </form>
     </div>
@@ -50,7 +51,7 @@
                         </a>
                     </td>
                     <td>{{ visit.student.student_id }}</td>
-                    <td>{{ visit.signed_in_at.strftime('%I:%M %p') }}</td>
+                    <td>{{ visit.signed_in_at | localdt('%I:%M %p') }}</td>
                     <td>
                         {% set wcount = visit.student.active_warnings_count %}
                         <span class="strike-indicators">
@@ -72,6 +73,7 @@
                     <td>
                         <form method="POST"
                               action="{{ url_for('student.sign_out', visit_id=visit.id) }}">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                             <button class="btn btn-outline-secondary btn-sm" type="submit">
                                 Sign Out
                             </button>
@@ -97,6 +99,7 @@
             {% for area in current_user.areas %}
             <div class="col-md-3">
                 <form method="POST" action="{{ url_for('monitor.sign_in') }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <input type="hidden" name="area_id" value="{{ area.id }}">
                     <button type="submit" class="btn btn-outline-primary w-100 py-3">
                         {{ area.name }}

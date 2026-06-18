@@ -31,8 +31,9 @@
                 <span>Training &amp; Certifications</span>
                 <form method="POST"
                       action="{{ url_for('integration.sync_student', student_id=student.id) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button type="submit" class="btn btn-outline-secondary btn-sm"
-                            title="Pull latest data from Banner / ASULearn">
+                            title="Pull latest data from Banner / ASULearn / Canvas">
                         Sync External
                     </button>
                 </form>
@@ -101,7 +102,7 @@
                             <span class="d-block">{{ w.reason }}</span>
                             <small class="text-muted">by {{ w.issued_by.display_name }}</small>
                         </td>
-                        <td><small>{{ w.created_at.strftime('%Y-%m-%d') }}</small></td>
+                        <td><small>{{ w.created_at | localdt('%Y-%m-%d') }}</small></td>
                         <td>
                             {% if w.resolved %}
                             <span class="badge bg-secondary">Resolved</span>
@@ -123,14 +124,14 @@
             <div class="card-header">Issue a Warning</div>
             <div class="card-body">
                 <form method="POST" action="{{ url_for('admin.issue_warning') }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <input type="hidden" name="student_id" value="{{ student.id }}">
                     <div class="mb-3">
                         <label class="form-label">Area</label>
                         <select name="area_id" class="form-select" required>
-                            {% for area in student.visits | map(attribute='area') | unique %}
+                            {% for area in areas %}
                             <option value="{{ area.id }}">{{ area.name }}</option>
                             {% endfor %}
-                            {# Fallback: show all areas #}
                         </select>
                     </div>
                     <div class="mb-3">
@@ -150,6 +151,7 @@
     <div class="card-body">
         <form method="POST"
               action="{{ url_for('monitor.update_care_note', student_id=student.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div class="mb-3">
                 <textarea name="care_note" class="form-control" rows="3"
                           placeholder="Notes about this student that other monitors should be aware of...">{{ student.care_note or '' }}</textarea>
@@ -177,10 +179,10 @@
             {% for v in visits %}
             <tr>
                 <td>{{ v.area.name }}</td>
-                <td>{{ v.signed_in_at.strftime('%Y-%m-%d %I:%M %p') }}</td>
+                <td>{{ v.signed_in_at | localdt('%Y-%m-%d %I:%M %p') }}</td>
                 <td>
                     {% if v.signed_out_at %}
-                    {{ v.signed_out_at.strftime('%Y-%m-%d %I:%M %p') }}
+                    {{ v.signed_out_at | localdt('%Y-%m-%d %I:%M %p') }}
                     {% else %}
                     <span class="badge bg-success">Active</span>
                     {% endif %}

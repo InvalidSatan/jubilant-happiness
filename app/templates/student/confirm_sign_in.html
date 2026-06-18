@@ -90,6 +90,7 @@
 
                 {# --- Acknowledge & sign in --- #}
                 <form method="POST" action="{{ url_for('student.sign_in') }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <input type="hidden" name="student_id" value="{{ student.id }}">
                     <input type="hidden" name="area_id" value="{{ area.id }}">
                     <div class="mb-3">

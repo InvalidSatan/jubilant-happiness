@@ -17,8 +17,11 @@ from app.models import (
     Warning,
     Monitor,
 )
+from app.routes import bounce_faculty_to_dashboard
+from app.utils import format_local
 
 reports_bp = Blueprint("reports", __name__)
+reports_bp.before_request(bounce_faculty_to_dashboard)
 
 
 def admin_required(f):
@@ -28,7 +31,7 @@ def admin_required(f):
     @wraps(f)
     @login_required
     def decorated(*args, **kwargs):
-        if not current_user.is_admin:
+        if not getattr(current_user, "is_admin", False):
             flash("Admin access required.", "danger")
             return redirect(url_for("monitor.dashboard"))
         return f(*args, **kwargs)
@@ -122,8 +125,8 @@ def visits_export():
             v.student.display_name,
             v.student.student_id,
             v.area.name,
-            v.signed_in_at.strftime("%Y-%m-%d %H:%M"),
-            v.signed_out_at.strftime("%Y-%m-%d %H:%M") if v.signed_out_at else "Active",
+            format_local(v.signed_in_at, "%Y-%m-%d %H:%M"),
+            format_local(v.signed_out_at, "%Y-%m-%d %H:%M") if v.signed_out_at else "Active",
             v.acknowledged_by.display_name,
             v.signed_out_by.display_name if v.signed_out_by else "",
             v.note or "",
@@ -206,8 +209,8 @@ def coverage_export():
         writer.writerow([
             s.monitor.display_name,
             s.area.name,
-            s.signed_in_at.strftime("%Y-%m-%d %H:%M"),
-            s.signed_out_at.strftime("%Y-%m-%d %H:%M") if s.signed_out_at else "Active",
+            format_local(s.signed_in_at, "%Y-%m-%d %H:%M"),
+            format_local(s.signed_out_at, "%Y-%m-%d %H:%M") if s.signed_out_at else "Active",
             f"{hours:.1f}",
         ])
 
@@ -254,9 +257,17 @@ def safety():
         else:
             area_counts[name]["active"] += 1
 
-    # Currently banned students
-    banned_students = Student.query.all()
-    banned_students = [s for s in banned_students if s.is_banned]
+    # Currently banned students (3+ active warnings). Done as a single grouped
+    # query rather than is_banned per student (which is one COUNT each — N+1).
+    banned_students = (
+        db.session.query(Student)
+        .join(Warning, Warning.student_id == Student.id)
+        .filter(Warning.resolved.is_(False))
+        .group_by(Student.id)
+        .having(func.count(Warning.id) >= 3)
+        .order_by(Student.display_name)
+        .all()
+    )
 
     return render_template(
         "admin/reports/safety.html",
@@ -300,10 +311,10 @@ def safety_export():
             w.area.name,
             w.reason,
             w.issued_by.display_name,
-            w.created_at.strftime("%Y-%m-%d %H:%M"),
+            format_local(w.created_at, "%Y-%m-%d %H:%M"),
             "Resolved" if w.resolved else "Active",
             w.resolved_by.display_name if w.resolved_by else "",
-            w.resolved_at.strftime("%Y-%m-%d %H:%M") if w.resolved_at else "",
+            format_local(w.resolved_at, "%Y-%m-%d %H:%M") if w.resolved_at else "",
         ])
 
     return Response(

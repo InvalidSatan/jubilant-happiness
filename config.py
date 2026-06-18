@@ -10,6 +10,23 @@ class Config:
     )
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
+    # Timestamps are stored in UTC; this is the zone they're displayed in.
+    # App State is US Eastern; override via the DISPLAY_TIMEZONE env var.
+    DISPLAY_TIMEZONE = os.environ.get("DISPLAY_TIMEZONE", "America/New_York")
+
+    # --- Security: session cookies ---
+    # HttpOnly stops JS from reading the session cookie; SameSite=Lax blocks the
+    # cookie on cross-site POSTs (defense in depth alongside CSRF tokens).
+    # SESSION_COOKIE_SECURE is enabled in ProductionConfig (requires HTTPS).
+    SESSION_COOKIE_HTTPONLY = True
+    SESSION_COOKIE_SAMESITE = "Lax"
+
+    # --- CSRF (Flask-WTF) ---
+    # Tokens are valid for the life of the session rather than expiring after an
+    # hour. The kiosk and monitor dashboard are routinely left open all shift, so
+    # a 1-hour token limit would cause spurious "CSRF token expired" failures.
+    WTF_CSRF_TIME_LIMIT = None
+
     # Banner SIS integration
     BANNER_API_URL = os.environ.get("BANNER_API_URL", "")
     BANNER_API_KEY = os.environ.get("BANNER_API_KEY", "")
@@ -22,6 +39,12 @@ class Config:
     CANVAS_API_URL = os.environ.get("CANVAS_API_URL", "")
     CANVAS_API_TOKEN = os.environ.get("CANVAS_API_TOKEN", "")
 
+    # Maps external course identifiers to equipment names, as a JSON object,
+    # e.g. '{"ART 2210": "MIG Welder", "SHOP_SAFETY_101": "Basic Woodshop"}'.
+    # Lets staff configure the Banner/ASULearn/Canvas course mapping without
+    # editing code; merged on top of the defaults in integration.py.
+    COURSE_EQUIPMENT_MAP_JSON = os.environ.get("COURSE_EQUIPMENT_MAP_JSON", "")
+
 
 class ProductionConfig(Config):
     """Production configuration for university network deployment."""
@@ -32,6 +55,10 @@ class ProductionConfig(Config):
 
     # Proxy support — trust X-Forwarded-* headers from reverse proxy
     PREFERRED_URL_SCHEME = "https"
+
+    # Only send the session cookie over HTTPS. Safe because production runs
+    # behind the TLS-terminating reverse proxy documented in DEPLOYMENT.md.
+    SESSION_COOKIE_SECURE = True
 
     # PostgreSQL connection-pool tuning (via SQLAlchemy)
     SQLALCHEMY_ENGINE_OPTIONS = {
@@ -48,6 +75,15 @@ class ProductionConfig(Config):
             raise RuntimeError(
                 "SECRET_KEY environment variable must be set for production."
             )
+
+        # Trust the reverse proxy's X-Forwarded-* headers so url_for(_external),
+        # request.is_secure, and Secure-cookie handling reflect the real HTTPS
+        # request rather than the internal HTTP hop to gunicorn.
+        from werkzeug.middleware.proxy_fix import ProxyFix
+
+        app.wsgi_app = ProxyFix(
+            app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1
+        )
 
         db_url = app.config.get("SQLALCHEMY_DATABASE_URI", "")
         if "sqlite" in db_url:

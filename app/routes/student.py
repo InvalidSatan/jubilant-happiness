@@ -13,8 +13,10 @@ from app.models import (
     student_training,
 )
 from app.utils import is_valid_banner_id
+from app.routes import bounce_faculty_to_dashboard
 
 student_bp = Blueprint("student", __name__)
+student_bp.before_request(bounce_faculty_to_dashboard)
 
 
 @student_bp.route("/lookup", methods=["GET", "POST"])

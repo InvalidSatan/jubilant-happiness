@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Edit Equipment - Octagon Woodshop Log{% endblock %}
+
+{% block content %}
+<h2>Edit Equipment</h2>
+
+<div class="row">
+    <div class="col-md-6">
+        <form method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="mb-3">
+                <label class="form-label">Name</label>
+                <input type="text" name="name" class="form-control"
+                       value="{{ equipment.name }}" required>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Area</label>
+                <select name="area_id" class="form-select" required>
+                    {% for area in areas %}
+                    <option value="{{ area.id }}" {{ 'selected' if area.id == equipment.area_id }}>
+                        {{ area.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="mb-3 form-check">
+                <input class="form-check-input" type="checkbox" name="requires_training"
+                       id="req_training" {{ 'checked' if equipment.requires_training }}>
+                <label class="form-check-label" for="req_training">Requires training</label>
+            </div>
+            <button type="submit" class="btn btn-primary">Save Changes</button>
+            <a href="{{ url_for('admin.equipment') }}" class="btn btn-outline-secondary">Cancel</a>
+        </form>
+    </div>
+</div>
+{% endblock %}

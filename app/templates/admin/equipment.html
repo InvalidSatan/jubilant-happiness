@@ -11,6 +11,7 @@
             <div class="card-header">Add Equipment</div>
             <div class="card-body">
                 <form method="POST">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <div class="mb-3">
                         <label class="form-label">Name</label>
                         <input type="text" name="name" class="form-control" required>
@@ -40,9 +41,9 @@
     <div class="col-md-8 mb-4">
         <div class="card">
             <div class="card-header">All Equipment</div>
-            <table class="table table-sm mb-0">
+            <table class="table table-sm align-middle mb-0">
                 <thead>
-                    <tr><th>Name</th><th>Area</th><th>Training Required</th></tr>
+                    <tr><th>Name</th><th>Area</th><th>Training Required</th><th></th></tr>
                 </thead>
                 <tbody>
                     {% for eq in all_equipment %}
@@ -50,9 +51,19 @@
                         <td>{{ eq.name }}</td>
                         <td><span class="badge bg-secondary">{{ eq.area.name }}</span></td>
                         <td>{{ "Yes" if eq.requires_training else "No" }}</td>
+                        <td class="text-end text-nowrap">
+                            <a href="{{ url_for('admin.edit_equipment', equipment_id=eq.id) }}"
+                               class="btn btn-outline-secondary btn-sm">Edit</a>
+                            <form method="POST" class="d-inline"
+                                  action="{{ url_for('admin.delete_equipment', equipment_id=eq.id) }}"
+                                  onsubmit="return confirm('Delete {{ eq.name }}?');">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <button type="submit" class="btn btn-outline-danger btn-sm">Delete</button>
+                            </form>
+                        </td>
                     </tr>
                     {% else %}
-                    <tr><td colspan="3" class="text-muted">No equipment added yet.</td></tr>
+                    <tr><td colspan="4" class="text-muted">No equipment added yet.</td></tr>
                     {% endfor %}
                 </tbody>
             </table>

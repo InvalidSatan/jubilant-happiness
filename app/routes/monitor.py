@@ -13,8 +13,10 @@ from app.models import (
     student_training,
     Equipment,
 )
+from app.routes import bounce_faculty_to_dashboard
 
 monitor_bp = Blueprint("monitor", __name__)
+monitor_bp.before_request(bounce_faculty_to_dashboard)
 
 
 @monitor_bp.route("/dashboard")
@@ -137,12 +139,15 @@ def student_detail(student_id):
         .all()
     )
 
+    areas = ShopArea.query.order_by(ShopArea.name).all()
+
     return render_template(
         "monitor/student_detail.html",
         student=student,
         warnings=warnings,
         visits=visits,
         training_records=training_records,
+        areas=areas,
     )
 
 

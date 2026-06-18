@@ -72,19 +72,59 @@
     </table>
 </div>
 
+{# --- External integration status --- #}
+<div class="card mb-4">
+    <div class="card-header">External Integrations</div>
+    <table class="table table-sm mb-0">
+        <tbody>
+            {% for name, configured in integrations.items() %}
+            <tr>
+                <td>{{ name }}</td>
+                <td class="text-end">
+                    {% if configured %}
+                    <span class="badge bg-success">Configured</span>
+                    {% else %}
+                    <span class="badge bg-secondary">Not configured</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    <div class="card-footer d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <span class="text-muted small">
+            Credentials are set via environment variables (see <code>.env.example</code>).
+            "Configured" only means a URL and token are present — use a student's
+            <em>Sync External</em> button to confirm live connectivity.
+        </span>
+        <form method="POST" action="{{ url_for('integration.sync_all') }}"
+              onsubmit="return confirm('Pull external training for all linked students now?');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-outline-primary btn-sm">
+                Sync All Students
+            </button>
+        </form>
+    </div>
+</div>
+
 {# --- Quick links --- #}
 <div class="row">
-    <div class="col-md-4">
+    <div class="col-md-3">
+        <a href="{{ url_for('admin.live') }}" class="btn btn-outline-success w-100 mb-2">
+            Who's in the Shop
+        </a>
+    </div>
+    <div class="col-md-3">
         <a href="{{ url_for('admin.equipment') }}" class="btn btn-outline-primary w-100 mb-2">
             Manage Equipment
         </a>
     </div>
-    <div class="col-md-4">
+    <div class="col-md-3">
         <a href="{{ url_for('admin.warnings') }}" class="btn btn-outline-warning w-100 mb-2">
             View All Warnings
         </a>
     </div>
-    <div class="col-md-4">
+    <div class="col-md-3">
         <a href="{{ url_for('reports.hub') }}" class="btn btn-outline-secondary w-100 mb-2">
             View Reports
         </a>

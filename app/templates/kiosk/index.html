@@ -162,6 +162,7 @@
             <div class="kiosk-input-wrap">
                 <label>Scan or enter your Banner ID</label>
                 <form method="POST" action="{{ url_for('kiosk.scan') }}" autocomplete="off">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <input type="text" name="banner_id" class="kiosk-input"
                            placeholder="900000000" autofocus
                            inputmode="numeric" pattern="[0-9]*">

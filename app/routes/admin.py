@@ -16,15 +16,20 @@ from app.models import (
     monitor_areas,
     student_training,
 )
+from app.routes import bounce_faculty_to_dashboard, get_live_shop_state
 
 admin_bp = Blueprint("admin", __name__)
+admin_bp.before_request(bounce_faculty_to_dashboard)
 
 
 def admin_required(f):
     @wraps(f)
     @login_required
     def decorated(*args, **kwargs):
-        if not current_user.is_admin:
+        # getattr guards against non-Monitor users (e.g. Faculty) that lack the
+        # is_admin attribute; the blueprint guard already redirects faculty, so
+        # this is belt-and-suspenders.
+        if not getattr(current_user, "is_admin", False):
             flash("Admin access required.", "danger")
             return redirect(url_for("monitor.dashboard"))
         return f(*args, **kwargs)
@@ -38,6 +43,8 @@ def admin_required(f):
 @admin_bp.route("/")
 @admin_required
 def index():
+    from app.routes.integration import integration_status
+
     monitors = Monitor.query.order_by(Monitor.display_name).all()
     areas = ShopArea.query.order_by(ShopArea.name).all()
     students_count = Student.query.count()
@@ -50,6 +57,22 @@ def index():
         students_count=students_count,
         active_monitor_sessions=active_monitor_sessions,
         active_student_visits=active_student_visits,
+        integrations=integration_status(),
+    )
+
+
+@admin_bp.route("/live")
+@admin_required
+def live():
+    """Department-wide view of who is currently in each shop area."""
+    shop_state = get_live_shop_state()
+    total_students = sum(len(a["visits"]) for a in shop_state)
+    total_monitors = sum(len(a["monitors"]) for a in shop_state)
+    return render_template(
+        "live_shop.html",
+        shop_state=shop_state,
+        total_students=total_students,
+        total_monitors=total_monitors,
     )
 
 
@@ -150,6 +173,63 @@ def equipment():
     return render_template(
         "admin/equipment.html", areas=areas, all_equipment=all_equipment
     )
+
+
+@admin_bp.route("/equipment/<int:equipment_id>/edit", methods=["GET", "POST"])
+@admin_required
+def edit_equipment(equipment_id):
+    eq = db.session.get(Equipment, equipment_id)
+    if not eq:
+        flash("Equipment not found.", "danger")
+        return redirect(url_for("admin.equipment"))
+
+    areas = ShopArea.query.order_by(ShopArea.name).all()
+
+    if request.method == "POST":
+        name = request.form.get("name", "").strip()
+        area_id = request.form.get("area_id", type=int)
+        requires_training = request.form.get("requires_training") == "on"
+        area = db.session.get(ShopArea, area_id) if area_id else None
+
+        if not name or not area:
+            flash("Name and a valid area are required.", "danger")
+            return render_template(
+                "admin/edit_equipment.html", equipment=eq, areas=areas
+            )
+
+        eq.name = name
+        eq.area_id = area.id
+        eq.requires_training = requires_training
+        db.session.commit()
+        flash(f"Equipment '{name}' updated.", "success")
+        return redirect(url_for("admin.equipment"))
+
+    return render_template("admin/edit_equipment.html", equipment=eq, areas=areas)
+
+
+@admin_bp.route("/equipment/<int:equipment_id>/delete", methods=["POST"])
+@admin_required
+def delete_equipment(equipment_id):
+    eq = db.session.get(Equipment, equipment_id)
+    if not eq:
+        flash("Equipment not found.", "danger")
+        return redirect(url_for("admin.equipment"))
+
+    # Don't orphan training history: block deletion while records reference it.
+    trained = eq.trained_students
+    if trained:
+        flash(
+            f"Cannot delete '{eq.name}' — {len(trained)} student training "
+            "record(s) reference it. Revoke those certifications first.",
+            "warning",
+        )
+        return redirect(url_for("admin.equipment"))
+
+    name = eq.name
+    db.session.delete(eq)
+    db.session.commit()
+    flash(f"Equipment '{name}' deleted.", "info")
+    return redirect(url_for("admin.equipment"))
 
 
 # ---------------------------------------------------------------------------

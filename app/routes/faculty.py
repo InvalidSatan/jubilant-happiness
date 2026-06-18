@@ -10,8 +10,10 @@ from flask import (
     url_for,
     flash,
     request,
+    Response,
 )
 from flask_login import login_user, logout_user, login_required, current_user
+from sqlalchemy import func
 
 from app import db
 from app.models import (
@@ -20,9 +22,12 @@ from app.models import (
     Student,
     ShopArea,
     Equipment,
+    Warning,
     student_training,
     monitor_areas,
 )
+from app.routes import is_safe_redirect_url, get_live_shop_state
+from app.utils import is_valid_banner_id
 
 faculty_bp = Blueprint("faculty", __name__)
 
@@ -76,11 +81,37 @@ def login():
         if faculty and faculty.check_password(password):
             login_user(faculty)
             next_page = request.args.get("next")
-            return redirect(next_page or url_for("faculty.dashboard"))
+            if next_page and is_safe_redirect_url(next_page):
+                return redirect(next_page)
+            return redirect(url_for("faculty.dashboard"))
 
         flash("Invalid username or password.", "danger")
 
     return render_template("faculty/login.html")
+
+
+@faculty_bp.route("/change-password", methods=["GET", "POST"])
+@faculty_required
+def change_password():
+    """Let a faculty member change their own password."""
+    if request.method == "POST":
+        current = request.form.get("current_password", "")
+        new = request.form.get("new_password", "")
+        confirm = request.form.get("confirm_password", "")
+
+        if not current_user.check_password(current):
+            flash("Current password is incorrect.", "danger")
+        elif len(new) < 8:
+            flash("New password must be at least 8 characters.", "danger")
+        elif new != confirm:
+            flash("New passwords do not match.", "danger")
+        else:
+            current_user.set_password(new)
+            db.session.commit()
+            flash("Your password has been updated.", "success")
+            return redirect(url_for("faculty.dashboard"))
+
+    return render_template("auth/change_password.html")
 
 
 @faculty_bp.route("/logout")
@@ -117,6 +148,21 @@ def dashboard():
     )
 
 
+@faculty_bp.route("/live")
+@faculty_required
+def live():
+    """Department-wide view of who is currently in each shop area."""
+    shop_state = get_live_shop_state()
+    total_students = sum(len(a["visits"]) for a in shop_state)
+    total_monitors = sum(len(a["monitors"]) for a in shop_state)
+    return render_template(
+        "live_shop.html",
+        shop_state=shop_state,
+        total_students=total_students,
+        total_monitors=total_monitors,
+    )
+
+
 # ---------------------------------------------------------------------------
 # Student management
 # ---------------------------------------------------------------------------
@@ -142,6 +188,55 @@ def students():
     )
 
 
+@faculty_bp.route("/students/export")
+@faculty_required
+def export_students():
+    """Export the (optionally filtered) student roster as CSV."""
+    search = request.args.get("search", "").strip()
+    query = Student.query
+    if search:
+        query = query.filter(
+            db.or_(
+                Student.student_id.ilike(f"%{search}%"),
+                Student.display_name.ilike(f"%{search}%"),
+                Student.email.ilike(f"%{search}%"),
+            )
+        )
+    students_list = query.order_by(Student.display_name).all()
+
+    # Active-warning counts in a single grouped query (avoid N+1 per student).
+    warn_counts = dict(
+        db.session.query(Warning.student_id, func.count(Warning.id))
+        .filter(Warning.resolved.is_(False))
+        .group_by(Warning.student_id)
+        .all()
+    )
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(
+        ["Banner ID", "Name", "Email", "Canvas User ID", "Enrollment Term",
+         "Active Warnings", "Banned"]
+    )
+    for s in students_list:
+        cnt = warn_counts.get(s.id, 0)
+        writer.writerow([
+            s.student_id,
+            s.display_name,
+            s.email or "",
+            s.canvas_user_id or "",
+            s.enrollment_term or "",
+            cnt,
+            "Yes" if cnt >= 3 else "No",
+        ])
+
+    return Response(
+        output.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": "attachment; filename=students.csv"},
+    )
+
+
 @faculty_bp.route("/students/add", methods=["GET", "POST"])
 @faculty_required
 def add_student():
@@ -153,6 +248,10 @@ def add_student():
 
         if not banner_id or not display_name:
             flash("Banner ID and name are required.", "danger")
+            return render_template("faculty/add_student.html")
+
+        if not is_valid_banner_id(banner_id):
+            flash("Banner ID must be exactly 9 digits.", "danger")
             return render_template("faculty/add_student.html")
 
         if Student.query.filter_by(student_id=banner_id).first():
@@ -243,21 +342,37 @@ def upload_students():
             added = 0
             skipped = 0
             errors = []
+            seen_ids = set()  # Banner IDs already handled in THIS file
 
             for row_num, row in enumerate(reader, start=2):
-                banner_id = row.get(banner_col, "").strip()
-                name = row.get(name_col, "").strip()
-                email = row.get(email_col, "").strip() if email_col else None
+                banner_id = (row.get(banner_col) or "").strip()
+                name = (row.get(name_col) or "").strip()
+                email = (row.get(email_col) or "").strip() if email_col else None
                 canvas_user_id = (
-                    row.get(canvas_col, "").strip() if canvas_col else None
+                    (row.get(canvas_col) or "").strip() if canvas_col else None
                 )
 
                 if not banner_id or not name:
                     errors.append(f"Row {row_num}: missing banner_id or name")
                     continue
 
+                if not is_valid_banner_id(banner_id):
+                    errors.append(
+                        f"Row {row_num}: Banner ID '{banner_id}' must be exactly 9 digits"
+                    )
+                    continue
+
+                # Skip duplicates within the same file as well as against the DB.
+                # Without the in-batch check, two identical IDs both pass the DB
+                # lookup (neither is committed yet) and the final commit fails
+                # with an IntegrityError, discarding the entire upload.
+                if banner_id in seen_ids:
+                    skipped += 1
+                    continue
+
                 if Student.query.filter_by(student_id=banner_id).first():
                     skipped += 1
+                    seen_ids.add(banner_id)
                     continue
 
                 student = Student(
@@ -267,6 +382,7 @@ def upload_students():
                     canvas_user_id=canvas_user_id or None,
                 )
                 db.session.add(student)
+                seen_ids.add(banner_id)
                 added += 1
 
             db.session.commit()
@@ -402,6 +518,62 @@ def training():
         areas=areas,
         selected_area_id=area_id,
         search=search,
+    )
+
+
+@faculty_bp.route("/training/export")
+@faculty_required
+def export_training():
+    """Export the (optionally filtered) training matrix as CSV."""
+    area_id = request.args.get("area_id", type=int)
+    search = request.args.get("search", "").strip()
+
+    query = (
+        db.session.query(
+            Student.student_id.label("banner_id"),
+            Student.display_name,
+            Equipment.name.label("equipment_name"),
+            ShopArea.name.label("area_name"),
+            student_training.c.certified_semester,
+            student_training.c.source,
+        )
+        .select_from(student_training)
+        .join(Student, Student.id == student_training.c.student_id)
+        .join(Equipment, Equipment.id == student_training.c.equipment_id)
+        .join(ShopArea, ShopArea.id == Equipment.area_id)
+    )
+    if area_id:
+        query = query.filter(Equipment.area_id == area_id)
+    if search:
+        query = query.filter(
+            db.or_(
+                Student.student_id.ilike(f"%{search}%"),
+                Student.display_name.ilike(f"%{search}%"),
+            )
+        )
+    records = query.order_by(
+        Student.display_name, ShopArea.name, Equipment.name
+    ).all()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(
+        ["Banner ID", "Name", "Certification", "Area", "Semester", "Source"]
+    )
+    for r in records:
+        writer.writerow([
+            r.banner_id,
+            r.display_name,
+            r.equipment_name,
+            r.area_name,
+            r.certified_semester or "",
+            r.source or "",
+        ])
+
+    return Response(
+        output.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": "attachment; filename=training_records.csv"},
     )
 
 

@@ -89,10 +89,10 @@
                 <tr>
                     <td>{{ s.monitor.display_name }}</td>
                     <td><span class="badge bg-secondary">{{ s.area.name }}</span></td>
-                    <td>{{ s.signed_in_at.strftime('%Y-%m-%d %I:%M %p') }}</td>
+                    <td>{{ s.signed_in_at | localdt('%Y-%m-%d %I:%M %p') }}</td>
                     <td>
                         {% if s.signed_out_at %}
-                        {{ s.signed_out_at.strftime('%Y-%m-%d %I:%M %p') }}
+                        {{ s.signed_out_at | localdt('%Y-%m-%d %I:%M %p') }}
                         {% else %}
                         <span class="badge bg-success">Active</span>
                         {% endif %}

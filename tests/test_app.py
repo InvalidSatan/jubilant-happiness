@@ -367,6 +367,40 @@ class TestReports:
         assert b"1" in resp.data  # total count
         assert b"Test warning for report" in resp.data
 
+    def test_safety_report_banned_students_count(self, client, seed):
+        """Only students with 3+ active warnings are counted as banned."""
+        login(client, "testadmin", "pass")
+        # Control student with 2 active warnings — must NOT be counted.
+        control = Student(student_id="900000222", display_name="TwoStrikes")
+        db.session.add(control)
+        db.session.commit()
+        for i in range(2):
+            db.session.add(
+                Warning(
+                    student_id=control.id,
+                    area_id=seed["area_id"],
+                    issued_by_id=seed["monitor_id"],
+                    reason=f"c{i}",
+                )
+            )
+        # Seed student gets 3 active warnings → banned.
+        for i in range(3):
+            db.session.add(
+                Warning(
+                    student_id=seed["student_id"],
+                    area_id=seed["area_id"],
+                    issued_by_id=seed["monitor_id"],
+                    reason=f"s{i}",
+                )
+            )
+        db.session.commit()
+
+        resp = client.get("/admin/reports/safety")
+        assert resp.status_code == 200
+        assert b"Currently Banned Students" in resp.data
+        # Exactly one banned student despite the 2-warning control existing.
+        assert b'<h3 class="text-danger">1</h3>' in resp.data
+
     def test_safety_csv_export(self, client, seed):
         login(client, "testadmin", "pass")
         client.post(
