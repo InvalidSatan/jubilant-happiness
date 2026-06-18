@@ -83,6 +83,10 @@ The Art Department operates five shared shop areas — **Sculpture**, **Ceramics
 - Grant or revoke student training certifications (with semester).
 - View and resolve all warnings.
 - Dashboard with real-time counts (monitors on duty, students signed in, etc.).
+- **External Integrations** status panel and a one-click **Sync All Students**.
+
+> Every signed-in user (monitor or faculty) can change their own password via
+> the **Account** link in the navbar — change the seed passwords on first login.
 
 ## Architecture
 
@@ -502,7 +506,7 @@ pip install pytest
 python -m pytest tests/ -v
 ```
 
-The test suite (94 tests) covers:
+The test suite (101 tests) covers:
 
 - Authentication (login, logout, redirects)
 - Monitor area sign-in / sign-out
@@ -552,7 +556,8 @@ the protection is active.
 │   ├── test_app.py              # Functional tests (auth, sessions, kiosk, reports, faculty)
 │   ├── test_security.py         # CSRF, open-redirect, cross-role isolation
 │   ├── test_integration_sync.py # Banner/ASULearn/Canvas training sync
-│   └── test_display.py          # Local-timezone formatting, warning area list
+│   ├── test_display.py          # Local-timezone formatting, warning area list
+│   └── test_account.py          # Self-service password change
 ├── config.py                    # App configuration (dev + production)
 ├── requirements.txt             # Python dependencies
 ├── run.py                       # Dev server entry point

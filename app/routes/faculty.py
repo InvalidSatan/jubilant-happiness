@@ -87,6 +87,30 @@ def login():
     return render_template("faculty/login.html")
 
 
+@faculty_bp.route("/change-password", methods=["GET", "POST"])
+@faculty_required
+def change_password():
+    """Let a faculty member change their own password."""
+    if request.method == "POST":
+        current = request.form.get("current_password", "")
+        new = request.form.get("new_password", "")
+        confirm = request.form.get("confirm_password", "")
+
+        if not current_user.check_password(current):
+            flash("Current password is incorrect.", "danger")
+        elif len(new) < 8:
+            flash("New password must be at least 8 characters.", "danger")
+        elif new != confirm:
+            flash("New passwords do not match.", "danger")
+        else:
+            current_user.set_password(new)
+            db.session.commit()
+            flash("Your password has been updated.", "success")
+            return redirect(url_for("faculty.dashboard"))
+
+    return render_template("auth/change_password.html")
+
+
 @faculty_bp.route("/logout")
 @faculty_required
 def logout():

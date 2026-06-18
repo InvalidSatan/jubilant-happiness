@@ -97,10 +97,16 @@
                     {{ current_user.display_name }}
                 </span>
                 {% if current_user.user_type == 'faculty' %}
+                <a href="{{ url_for('faculty.change_password') }}" class="btn btn-outline-light btn-sm me-2">
+                    Account
+                </a>
                 <a href="{{ url_for('faculty.logout') }}" class="btn btn-outline-light btn-sm">
                     Sign Out
                 </a>
                 {% else %}
+                <a href="{{ url_for('auth.change_password') }}" class="btn btn-outline-light btn-sm me-2">
+                    Account
+                </a>
                 <a href="{{ url_for('auth.logout') }}" class="btn btn-outline-light btn-sm">
                     Sign Out
                 </a>

@@ -44,6 +44,34 @@ def login():
     return render_template("auth/login.html")
 
 
+@auth_bp.route("/change-password", methods=["GET", "POST"])
+@login_required
+def change_password():
+    """Let a monitor change their own password."""
+    # Faculty have their own equivalent route.
+    if getattr(current_user, "user_type", None) == "faculty":
+        return redirect(url_for("faculty.change_password"))
+
+    if request.method == "POST":
+        current = request.form.get("current_password", "")
+        new = request.form.get("new_password", "")
+        confirm = request.form.get("confirm_password", "")
+
+        if not current_user.check_password(current):
+            flash("Current password is incorrect.", "danger")
+        elif len(new) < 8:
+            flash("New password must be at least 8 characters.", "danger")
+        elif new != confirm:
+            flash("New passwords do not match.", "danger")
+        else:
+            current_user.set_password(new)
+            db.session.commit()
+            flash("Your password has been updated.", "success")
+            return redirect(url_for("monitor.dashboard"))
+
+    return render_template("auth/change_password.html")
+
+
 @auth_bp.route("/logout")
 @login_required
 def logout():
