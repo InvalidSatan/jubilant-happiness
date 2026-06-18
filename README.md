@@ -79,7 +79,8 @@ The Art Department operates five shared shop areas — **Sculpture**, **Ceramics
 
 ### Admin Panel
 - Create and edit monitor accounts, assign area authorizations.
-- Manage equipment inventory per area.
+- Manage equipment inventory per area (add, edit, delete — deletion is blocked
+  while training records reference the item).
 - Grant or revoke student training certifications (with semester).
 - View and resolve all warnings.
 - Dashboard with real-time counts (monitors on duty, students signed in, etc.).
@@ -506,7 +507,7 @@ pip install pytest
 python -m pytest tests/ -v
 ```
 
-The test suite (101 tests) covers:
+The test suite (107 tests) covers:
 
 - Authentication (login, logout, redirects)
 - Monitor area sign-in / sign-out
@@ -557,7 +558,8 @@ the protection is active.
 │   ├── test_security.py         # CSRF, open-redirect, cross-role isolation
 │   ├── test_integration_sync.py # Banner/ASULearn/Canvas training sync
 │   ├── test_display.py          # Local-timezone formatting, warning area list
-│   └── test_account.py          # Self-service password change
+│   ├── test_account.py          # Self-service password change
+│   └── test_equipment.py        # Admin equipment edit/delete
 ├── config.py                    # App configuration (dev + production)
 ├── requirements.txt             # Python dependencies
 ├── run.py                       # Dev server entry point
