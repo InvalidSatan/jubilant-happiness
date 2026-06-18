@@ -10,6 +10,10 @@ class Config:
     )
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
+    # Timestamps are stored in UTC; this is the zone they're displayed in.
+    # App State is US Eastern; override via the DISPLAY_TIMEZONE env var.
+    DISPLAY_TIMEZONE = os.environ.get("DISPLAY_TIMEZONE", "America/New_York")
+
     # --- Security: session cookies ---
     # HttpOnly stops JS from reading the session cookie; SameSite=Lax blocks the
     # cookie on cross-site POSTs (defense in depth alongside CSRF tokens).

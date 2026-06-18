@@ -139,12 +139,15 @@ def student_detail(student_id):
         .all()
     )
 
+    areas = ShopArea.query.order_by(ShopArea.name).all()
+
     return render_template(
         "monitor/student_detail.html",
         student=student,
         warnings=warnings,
         visits=visits,
         training_records=training_records,
+        areas=areas,
     )
 
 

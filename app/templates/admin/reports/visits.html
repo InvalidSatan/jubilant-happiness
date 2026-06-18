@@ -78,10 +78,10 @@
                     </td>
                     <td><code>{{ v.student.student_id }}</code></td>
                     <td><span class="badge bg-secondary">{{ v.area.name }}</span></td>
-                    <td>{{ v.signed_in_at.strftime('%Y-%m-%d %I:%M %p') }}</td>
+                    <td>{{ v.signed_in_at | localdt('%Y-%m-%d %I:%M %p') }}</td>
                     <td>
                         {% if v.signed_out_at %}
-                        {{ v.signed_out_at.strftime('%Y-%m-%d %I:%M %p') }}
+                        {{ v.signed_out_at | localdt('%Y-%m-%d %I:%M %p') }}
                         {% else %}
                         <span class="badge bg-success">Active</span>
                         {% endif %}

@@ -474,6 +474,7 @@ All configuration is in `config.py` and can be overridden via environment variab
 |---|---|---|
 | `SECRET_KEY` | `dev-key-change-in-production` | Flask session secret. **Must** be set in production. |
 | `DATABASE_URL` | `sqlite:///instance/woodshop.db` | SQLAlchemy database URI. |
+| `DISPLAY_TIMEZONE` | `America/New_York` | IANA timezone for displaying timestamps (stored in UTC). |
 | `PORT` | `8080` | Server port (used by `start.sh`). |
 | `WORKERS` | `2` | Gunicorn worker count (used by `start.sh`). |
 | `BANNER_API_URL` | *(empty)* | Banner SIS API base URL. |
@@ -501,7 +502,7 @@ pip install pytest
 python -m pytest tests/ -v
 ```
 
-The test suite (86 tests) covers:
+The test suite (94 tests) covers:
 
 - Authentication (login, logout, redirects)
 - Monitor area sign-in / sign-out
@@ -515,6 +516,7 @@ The test suite (86 tests) covers:
   cross-role isolation, Banner ID validation)
 - External training sync (course→equipment mapping, Canvas source tagging,
   pagination, bulk "sync all")
+- Local-timezone display conversion and the issue-warning area list
 
 Most tests use an in-memory SQLite database and disable CSRF for convenience;
 `tests/test_security.py` runs a dedicated set with CSRF **enabled** to confirm
@@ -549,7 +551,8 @@ the protection is active.
 ├── tests/
 │   ├── test_app.py              # Functional tests (auth, sessions, kiosk, reports, faculty)
 │   ├── test_security.py         # CSRF, open-redirect, cross-role isolation
-│   └── test_integration_sync.py # Banner/ASULearn/Canvas training sync
+│   ├── test_integration_sync.py # Banner/ASULearn/Canvas training sync
+│   └── test_display.py          # Local-timezone formatting, warning area list
 ├── config.py                    # App configuration (dev + production)
 ├── requirements.txt             # Python dependencies
 ├── run.py                       # Dev server entry point

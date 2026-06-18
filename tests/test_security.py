@@ -145,6 +145,22 @@ class TestFacultyCannotReachMonitorPages:
         assert resp.headers["Location"].endswith("/faculty/")
 
 
+class TestUnauthenticatedLoginRouting:
+    """Anonymous users are sent to the login page matching the area they
+    requested, so faculty aren't bounced through the monitor login."""
+
+    def test_faculty_page_redirects_to_faculty_login(self, role_client):
+        resp = role_client.get("/faculty/students")
+        assert resp.status_code == 302
+        assert "/faculty/login" in resp.headers["Location"]
+
+    def test_monitor_page_redirects_to_monitor_login(self, role_client):
+        resp = role_client.get("/monitor/dashboard")
+        assert resp.status_code == 302
+        location = resp.headers["Location"]
+        assert "/login" in location and "/faculty/login" not in location
+
+
 # ---------------------------------------------------------------------------
 # Banner ID validation + CSV robustness (faculty flows).
 # ---------------------------------------------------------------------------

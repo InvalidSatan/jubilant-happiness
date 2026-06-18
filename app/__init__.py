@@ -13,6 +13,17 @@ login_manager.login_view = "auth.login"
 csrf = CSRFProtect()
 
 
+@login_manager.unauthorized_handler
+def _unauthorized():
+    """Route unauthenticated users to the login page that matches the area they
+    were trying to reach (faculty pages → faculty login), preserving ``next``."""
+    from flask import redirect, request, url_for
+
+    if request.path.startswith("/faculty"):
+        return redirect(url_for("faculty.login", next=request.url))
+    return redirect(url_for("auth.login", next=request.url))
+
+
 def create_app(config_class=None):
     app = Flask(__name__)
 
@@ -35,6 +46,11 @@ def create_app(config_class=None):
     migrate.init_app(app, db)
     login_manager.init_app(app)
     csrf.init_app(app)
+
+    # Jinja filter to render stored UTC datetimes in the shop's local timezone.
+    from app.utils import format_local
+
+    app.jinja_env.filters["localdt"] = format_local
 
     from app.models import Monitor, Faculty
 
