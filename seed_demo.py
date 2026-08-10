@@ -68,8 +68,11 @@ TRAINING = {
         ("Ceramics", "Kiln", CURRENT_SEMESTER),
         ("Ceramics", "Pottery Wheel", CURRENT_SEMESTER),
     ],
-    # 900777777 (Devon Brooks) deliberately has NO training records so the
-    # "No Record" badge can be demonstrated.
+    # 900777777 (Devon Brooks) deliberately has NO training records and three
+    # active warnings, so he demonstrates the hard ban. Note that a banned
+    # student never reaches the certification table — to demo the "No Record"
+    # badge use an unbanned student with no records in the area being entered,
+    # e.g. Riley Adams (900444444) signing in to Sculpture.
     "900888888": [
         ("Sculpture", "Basic Woodshop", PRIOR_SEMESTER),
     ],
