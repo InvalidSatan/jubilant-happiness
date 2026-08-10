@@ -1,0 +1,10 @@
+# Development and test dependencies.
+# Installs everything in requirements.txt plus the test tooling:
+#     pip install -r requirements-dev.txt
+#
+# Production installs should keep using requirements.txt so test tooling
+# is not deployed to the server.
+
+-r requirements.txt
+
+pytest==9.1.1
