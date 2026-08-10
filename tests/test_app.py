@@ -881,32 +881,63 @@ class TestCalendarPlaceholders:
         """Sample data must never be presented as if it were a real schedule."""
         faculty_login(client, "testfaculty", "pass")
         resp = client.get("/faculty/")
-        assert b"Sample schedule" in resp.data
-        assert b"Live" not in resp.data
+        body = resp.data.decode()
+        assert body.count("Sample</span>") == 3
+        assert "no calendar connected yet" in body
+        assert "Live</span>" not in body
+
+    def test_sample_cards_stay_labelled_when_another_area_connects(
+        self, client, faculty_seed, app
+    ):
+        """
+        Regression: the sample label was once derived from the first card only.
+        Connecting an area with no upcoming events pushed it to the front and
+        silently unlabelled every remaining card of fabricated shifts.
+        """
+        from app.models import ShopArea
+
+        ceramics = ShopArea.query.filter_by(name="Ceramics").first()
+        ceramics.calendar_id = "c_empty@group.calendar.google.com"
+        db.session.commit()
+
+        faculty_login(client, "testfaculty", "pass")
+        body = client.get("/faculty/").data.decode()
+
+        # Ceramics is connected and ranks first, but has no events to show.
+        assert "Calendar connected" in body
+        # The two placeholder cards behind it must still be labelled.
+        assert body.count("Sample</span>") == 2
+        assert body.count("no calendar connected yet") == 2
 
     def test_unconfigured_calendar_returns_placeholders(self, app):
+        from app.models import ShopArea
         from app.routes.integration import fetch_calendar_events
 
+        area = ShopArea.query.filter_by(name="Sculpture").first()
         with app.test_request_context():
-            events = fetch_calendar_events("Sculpture")
+            events = fetch_calendar_events(area)
 
-        assert events, "expected placeholder shifts when unconfigured"
+        assert events, "expected placeholder shifts when unconnected"
         assert all(e["placeholder"] for e in events)
         assert all(e["summary"] and e["start"] and e["end"] for e in events)
 
     def test_area_without_placeholder_data_returns_empty(self, app):
+        from app.models import ShopArea
         from app.routes.integration import fetch_calendar_events
 
+        area = ShopArea.query.filter_by(name="Ceramics").first()
         with app.test_request_context():
-            assert fetch_calendar_events("Ceramics") == []
+            assert fetch_calendar_events(area) == []
 
-    def test_configured_area_is_ranked_before_placeholder_areas(self, app):
+    def test_connected_area_is_ranked_before_placeholder_areas(self, app):
         from app.models import ShopArea
         from app.routes.integration import scheduled_areas
 
-        app.config["GOOGLE_CALENDAR_IDS"] = {"Ceramics": "abc@group.calendar.google.com"}
-        areas = ShopArea.query.order_by(ShopArea.name).all()
+        ceramics = ShopArea.query.filter_by(name="Ceramics").first()
+        ceramics.calendar_id = "abc@group.calendar.google.com"
+        db.session.commit()
 
+        areas = ShopArea.query.order_by(ShopArea.name).all()
         with app.test_request_context():
             ranked = scheduled_areas(areas, 3)
 
@@ -940,3 +971,77 @@ class TestCalendarPlaceholders:
         for bad in ("", "not-a-date", None):
             assert shift_day(bad) == ""
             assert shift_time(bad) == ""
+
+
+class TestFacultyShiftCalendars:
+    """Faculty-managed Google Calendar IDs, stored per shop area."""
+
+    def test_calendars_page_lists_all_areas(self, client, faculty_seed):
+        faculty_login(client, "testfaculty", "pass")
+        resp = client.get("/faculty/calendars")
+        assert resp.status_code == 200
+        for area in (b"Sculpture", b"Ceramics", b"Metal Smithing", b"DigiLab", b"Woodworking"):
+            assert area in resp.data
+
+    def test_calendars_page_requires_faculty_login(self, client):
+        resp = client.get("/faculty/calendars", follow_redirects=True)
+        assert b"Faculty Login" in resp.data or b"login" in resp.data.lower()
+
+    def test_connect_calendar_persists_and_promotes_area(self, client, faculty_seed):
+        from app.models import ShopArea
+
+        faculty_login(client, "testfaculty", "pass")
+        ceramics = ShopArea.query.filter_by(name="Ceramics").first()
+        resp = client.post(
+            "/faculty/calendars/update",
+            data={"area_id": ceramics.id, "calendar_id": "c_x1@group.calendar.google.com"},
+            follow_redirects=True,
+        )
+        assert b"Connected Ceramics" in resp.data
+
+        refreshed = ShopArea.query.filter_by(name="Ceramics").first()
+        assert refreshed.calendar_id == "c_x1@group.calendar.google.com"
+        assert refreshed.calendar_connected is True
+
+        # Ceramics has no placeholder shifts, so before connecting it never
+        # appeared on the dashboard. Connecting must surface it.
+        dash = client.get("/faculty/")
+        assert b"Ceramics" in dash.data
+
+    def test_clearing_calendar_id_disconnects_area(self, client, faculty_seed):
+        from app.models import ShopArea
+
+        faculty_login(client, "testfaculty", "pass")
+        area = ShopArea.query.filter_by(name="Sculpture").first()
+        area.calendar_id = "c_y2@group.calendar.google.com"
+        db.session.commit()
+
+        resp = client.post(
+            "/faculty/calendars/update",
+            data={"area_id": area.id, "calendar_id": "   "},
+            follow_redirects=True,
+        )
+        assert b"Disconnected" in resp.data
+        assert ShopArea.query.filter_by(name="Sculpture").first().calendar_id is None
+
+    def test_malformed_calendar_id_is_rejected(self, client, faculty_seed):
+        from app.models import ShopArea
+
+        faculty_login(client, "testfaculty", "pass")
+        area = ShopArea.query.filter_by(name="DigiLab").first()
+        resp = client.post(
+            "/faculty/calendars/update",
+            data={"area_id": area.id, "calendar_id": "my shop calendar"},
+            follow_redirects=True,
+        )
+        assert b"doesn&#39;t look like a calendar ID" in resp.data or b"look like a calendar ID" in resp.data
+        assert ShopArea.query.filter_by(name="DigiLab").first().calendar_id is None
+
+    def test_unknown_area_is_rejected(self, client, faculty_seed):
+        faculty_login(client, "testfaculty", "pass")
+        resp = client.post(
+            "/faculty/calendars/update",
+            data={"area_id": 9999, "calendar_id": "c_z3@group.calendar.google.com"},
+            follow_redirects=True,
+        )
+        assert b"Shop area not found" in resp.data

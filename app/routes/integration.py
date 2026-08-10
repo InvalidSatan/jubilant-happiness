@@ -171,9 +171,13 @@ def _sample_shifts_for(area_name: str) -> list[dict]:
     return events
 
 
-def fetch_calendar_events(area_name: str, max_results: int = 5) -> list[dict]:
+def fetch_calendar_events(area, max_results: int = 5) -> list[dict]:
     """
     Fetch upcoming monitor shifts for one shop area from Google Calendar.
+
+    Accepts a ShopArea (whose `calendar_id` faculty set from the portal) or a
+    bare area name, in which case there is no calendar id and placeholders are
+    returned.
 
     Returns a list of dicts:
         [{"summary": "Maria Garcia",
@@ -187,13 +191,15 @@ def fetch_calendar_events(area_name: str, max_results: int = 5) -> list[dict]:
     Every placeholder event is flagged `placeholder: True` so the template can
     label it — never let unflagged sample data reach the UI as if it were real.
     """
+    area_name = getattr(area, "name", area)
+    calendar_id = getattr(area, "calendar_id", None)
+
     api_url = current_app.config.get("GOOGLE_CALENDAR_API_URL")
     api_key = current_app.config.get("GOOGLE_CALENDAR_API_KEY")
-    calendar_id = current_app.config.get("GOOGLE_CALENDAR_IDS", {}).get(area_name)
 
     if not api_url or not api_key or not calendar_id:
         log.info(
-            "Google Calendar not configured for %s; using placeholder shifts.",
+            "Google Calendar not connected for %s; using placeholder shifts.",
             area_name,
         )
         return _sample_shifts_for(area_name)[:max_results]
@@ -235,14 +241,13 @@ def scheduled_areas(areas, limit: int) -> list:
     """
     The shop areas whose shift schedules are surfaced on the dashboard.
 
-    Prefers areas that have a real calendar id configured, then falls back to
-    ones with placeholder data, so connecting a calendar promotes that area
-    without anyone editing a template.
+    Areas with a calendar connected come first, then ones that only have
+    placeholder data, so connecting a calendar in the faculty portal promotes
+    that area onto the dashboard with no code or config change.
     """
-    configured = current_app.config.get("GOOGLE_CALENDAR_IDS", {})
     ranked = sorted(
-        (a for a in areas if a.name in configured or a.name in SAMPLE_SHIFTS),
-        key=lambda a: (a.name not in configured, a.name),
+        (a for a in areas if a.calendar_id or a.name in SAMPLE_SHIFTS),
+        key=lambda a: (not a.calendar_id, a.name),
     )
     return ranked[:limit]
 

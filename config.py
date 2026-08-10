@@ -28,14 +28,10 @@ class Config:
     )
     GOOGLE_CALENDAR_API_KEY = os.environ.get("GOOGLE_CALENDAR_API_KEY", "")
 
-    # Which Google Calendar backs each shop area's shift schedule, as
-    # "Area Name=calendar_id" pairs separated by commas. Example:
-    #   GOOGLE_CALENDAR_IDS="Sculpture=abc123@group.calendar.google.com,DigiLab=def456@..."
-    GOOGLE_CALENDAR_IDS = {
-        pair.split("=", 1)[0].strip(): pair.split("=", 1)[1].strip()
-        for pair in os.environ.get("GOOGLE_CALENDAR_IDS", "").split(",")
-        if "=" in pair
-    }
+    # Per-area calendar ids are NOT configured here — faculty own those
+    # calendars and set each one from the faculty portal, so they live on
+    # ShopArea.calendar_id in the database. Only the credential is deployment
+    # config.
 
     # How many area cards to show on the faculty dashboard. Three areas are
     # scheduled through Google Calendar so far; raise this as more move over.
