@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}Shift Calendars - Octagon Woodshop Log{% endblock %}
+
+{% block content %}
+<h2>Shift Calendars</h2>
+<p class="text-muted">
+    Connect each shop area to the Google Calendar holding its monitor shift
+    schedule. Connected areas show live shifts on the dashboard; the rest show
+    clearly labelled sample data until you connect them.
+</p>
+
+{% if not api_key_set %}
+<div class="alert alert-warning">
+    <strong>No Google Calendar API key is configured yet.</strong>
+    You can save calendar IDs now, but the dashboard will keep showing sample
+    shifts until an administrator sets <code>GOOGLE_CALENDAR_API_KEY</code> on
+    the server.
+</div>
+{% endif %}
+
+<div class="card">
+    <div class="card-header">Shop Areas</div>
+    <table class="table table-hover align-middle mb-0">
+        <thead>
+            <tr>
+                <th style="width: 18%">Area</th>
+                <th style="width: 14%">Status</th>
+                <th>Google Calendar ID</th>
+                <th style="width: 10%"></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for area in areas %}
+            <tr>
+                <form method="POST" action="{{ url_for('faculty.update_calendar') }}">
+                    <input type="hidden" name="area_id" value="{{ area.id }}">
+                    <td>{{ area.name }}</td>
+                    <td>
+                        {% if area.calendar_connected %}
+                        <span class="badge bg-success">Connected</span>
+                        {% else %}
+                        <span class="badge bg-secondary">Sample data</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <input type="text"
+                               name="calendar_id"
+                               class="form-control form-control-sm"
+                               value="{{ area.calendar_id or '' }}"
+                               placeholder="e.g. c_abc123@group.calendar.google.com"
+                               aria-label="Google Calendar ID for {{ area.name }}">
+                    </td>
+                    <td>
+                        <button type="submit" class="btn btn-outline-primary btn-sm">
+                            Save
+                        </button>
+                    </td>
+                </form>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div class="card mt-4">
+    <div class="card-body">
+        <h6 class="card-title">Where to find a calendar ID</h6>
+        <ol class="mb-2 small">
+            <li>Open Google Calendar and find the shop's calendar in the left sidebar.</li>
+            <li>Hover it, click the three dots, and choose <strong>Settings and sharing</strong>.</li>
+            <li>Scroll to <strong>Integrate calendar</strong> and copy the <strong>Calendar ID</strong>.</li>
+            <li>Paste it into the row above and click Save.</li>
+        </ol>
+        <p class="small text-muted mb-0">
+            Clearing the field disconnects that area and returns it to sample data.
+            Shifts are read only — this app never changes anything in Google Calendar.
+        </p>
+    </div>
+</div>
+{% endblock %}

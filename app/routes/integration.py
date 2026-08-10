@@ -6,6 +6,7 @@ the system can pull training/certification data automatically.
 """
 
 import logging
+from datetime import datetime, timedelta, timezone
 
 import requests
 from flask import Blueprint, current_app, flash, redirect, url_for, request
@@ -125,6 +126,130 @@ def fetch_canvas_enrollments(canvas_user_id: str) -> list[dict]:
     except requests.RequestException as exc:
         log.error("Canvas API request failed: %s", exc)
         return []
+
+
+# ---------------------------------------------------------------------------
+# Google Calendar Integration (monitor shift schedules)
+# ---------------------------------------------------------------------------
+# Placeholder shifts, shown on the faculty dashboard until real calendars are
+# connected. Times are relative to "today" so the cards never look stale in a
+# walkthrough. Replace nothing here — once GOOGLE_CALENDAR_API_KEY and a
+# calendar id for the area are set, live events take over automatically.
+SAMPLE_SHIFTS: dict[str, list[dict]] = {
+    "Sculpture": [
+        {"monitor": "Maria Garcia", "day_offset": 0, "start": "18:00", "end": "21:00"},
+        {"monitor": "Blake Wilson", "day_offset": 1, "start": "13:00", "end": "17:00"},
+        {"monitor": "Maria Garcia", "day_offset": 3, "start": "18:00", "end": "21:00"},
+    ],
+    "DigiLab": [
+        {"monitor": "Alex Smith", "day_offset": 0, "start": "10:00", "end": "14:00"},
+        {"monitor": "Alex Smith", "day_offset": 2, "start": "10:00", "end": "14:00"},
+        {"monitor": "Unassigned", "day_offset": 4, "start": "13:00", "end": "17:00"},
+    ],
+    "Woodworking": [
+        {"monitor": "Blake Wilson", "day_offset": 1, "start": "09:00", "end": "12:00"},
+        {"monitor": "Blake Wilson", "day_offset": 2, "start": "18:00", "end": "21:00"},
+        {"monitor": "Unassigned", "day_offset": 5, "start": "10:00", "end": "13:00"},
+    ],
+}
+
+
+def _sample_shifts_for(area_name: str) -> list[dict]:
+    """Build placeholder shift events for one area, dated from today."""
+    today = datetime.now(timezone.utc).date()
+    events = []
+    for shift in SAMPLE_SHIFTS.get(area_name, []):
+        day = today + timedelta(days=shift["day_offset"])
+        events.append(
+            {
+                "summary": shift["monitor"],
+                "start": f"{day.isoformat()}T{shift['start']}:00",
+                "end": f"{day.isoformat()}T{shift['end']}:00",
+                "placeholder": True,
+            }
+        )
+    return events
+
+
+def fetch_calendar_events(area, max_results: int = 5) -> list[dict]:
+    """
+    Fetch upcoming monitor shifts for one shop area from Google Calendar.
+
+    Accepts a ShopArea (whose `calendar_id` faculty set from the portal) or a
+    bare area name, in which case there is no calendar id and placeholders are
+    returned.
+
+    Returns a list of dicts:
+        [{"summary": "Maria Garcia",
+          "start": "2026-02-24T18:00:00",
+          "end":   "2026-02-24T21:00:00",
+          "placeholder": False}, ...]
+
+    This is a STUB.  Unlike the Banner/ASULearn/Canvas stubs it returns sample
+    data rather than an empty list when unconfigured, so the dashboard cards
+    show the intended shape of the feature before any calendar is connected.
+    Every placeholder event is flagged `placeholder: True` so the template can
+    label it — never let unflagged sample data reach the UI as if it were real.
+    """
+    area_name = getattr(area, "name", area)
+    calendar_id = getattr(area, "calendar_id", None)
+
+    api_url = current_app.config.get("GOOGLE_CALENDAR_API_URL")
+    api_key = current_app.config.get("GOOGLE_CALENDAR_API_KEY")
+
+    if not api_url or not api_key or not calendar_id:
+        log.info(
+            "Google Calendar not connected for %s; using placeholder shifts.",
+            area_name,
+        )
+        return _sample_shifts_for(area_name)[:max_results]
+
+    try:
+        resp = requests.get(
+            f"{api_url}/calendars/{calendar_id}/events",
+            params={
+                "key": api_key,
+                "timeMin": datetime.now(timezone.utc).isoformat(),
+                "maxResults": max_results,
+                "singleEvents": "true",
+                "orderBy": "startTime",
+            },
+            timeout=10,
+        )
+        resp.raise_for_status()
+        items = resp.json().get("items", [])
+    except requests.RequestException as exc:
+        log.error("Google Calendar request failed for %s: %s", area_name, exc)
+        return []
+
+    events = []
+    for item in items:
+        start = item.get("start", {})
+        end = item.get("end", {})
+        events.append(
+            {
+                "summary": item.get("summary", "Unassigned"),
+                "start": start.get("dateTime") or start.get("date", ""),
+                "end": end.get("dateTime") or end.get("date", ""),
+                "placeholder": False,
+            }
+        )
+    return events
+
+
+def scheduled_areas(areas, limit: int) -> list:
+    """
+    The shop areas whose shift schedules are surfaced on the dashboard.
+
+    Areas with a calendar connected come first, then ones that only have
+    placeholder data, so connecting a calendar in the faculty portal promotes
+    that area onto the dashboard with no code or config change.
+    """
+    ranked = sorted(
+        (a for a in areas if a.calendar_id or a.name in SAMPLE_SHIFTS),
+        key=lambda a: (not a.calendar_id, a.name),
+    )
+    return ranked[:limit]
 
 
 # ---------------------------------------------------------------------------

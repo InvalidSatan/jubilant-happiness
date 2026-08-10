@@ -36,7 +36,17 @@ class ShopArea(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(64), unique=True, nullable=False)
 
+    # Google Calendar holding this area's monitor shift schedule. Faculty own
+    # these calendars and paste the id in from the faculty portal, so it lives
+    # here rather than in deployment config. Empty means "not connected yet",
+    # and the dashboard falls back to labelled placeholder shifts.
+    calendar_id = db.Column(db.String(255), nullable=True)
+
     equipment = db.relationship("Equipment", backref="area", lazy="dynamic")
+
+    @property
+    def calendar_connected(self):
+        return bool(self.calendar_id)
 
     def __repr__(self):
         return f"<ShopArea {self.name}>"

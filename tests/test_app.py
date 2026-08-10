@@ -863,3 +863,185 @@ class TestFacultyMonitorManagement:
         )
         assert b"New Faculty" in resp.data
         assert Faculty.query.filter_by(username="newfac").first() is not None
+
+
+class TestCalendarPlaceholders:
+    """Google Calendar shift cards on the faculty dashboard."""
+
+    def test_dashboard_shows_three_schedule_cards(self, client, faculty_seed):
+        faculty_login(client, "testfaculty", "pass")
+        resp = client.get("/faculty/")
+        assert resp.status_code == 200
+        assert b"Upcoming Monitor Shifts" in resp.data
+        # Three areas have placeholder schedules seeded.
+        for area in (b"Sculpture", b"DigiLab", b"Woodworking"):
+            assert area in resp.data
+
+    def test_placeholder_shifts_are_labelled_as_samples(self, client, faculty_seed):
+        """Sample data must never be presented as if it were a real schedule."""
+        faculty_login(client, "testfaculty", "pass")
+        resp = client.get("/faculty/")
+        body = resp.data.decode()
+        assert body.count("Sample</span>") == 3
+        assert "no calendar connected yet" in body
+        assert "Live</span>" not in body
+
+    def test_sample_cards_stay_labelled_when_another_area_connects(
+        self, client, faculty_seed, app
+    ):
+        """
+        Regression: the sample label was once derived from the first card only.
+        Connecting an area with no upcoming events pushed it to the front and
+        silently unlabelled every remaining card of fabricated shifts.
+        """
+        from app.models import ShopArea
+
+        ceramics = ShopArea.query.filter_by(name="Ceramics").first()
+        ceramics.calendar_id = "c_empty@group.calendar.google.com"
+        db.session.commit()
+
+        faculty_login(client, "testfaculty", "pass")
+        body = client.get("/faculty/").data.decode()
+
+        # Ceramics is connected and ranks first, but has no events to show.
+        assert "Calendar connected" in body
+        # The two placeholder cards behind it must still be labelled.
+        assert body.count("Sample</span>") == 2
+        assert body.count("no calendar connected yet") == 2
+
+    def test_unconfigured_calendar_returns_placeholders(self, app):
+        from app.models import ShopArea
+        from app.routes.integration import fetch_calendar_events
+
+        area = ShopArea.query.filter_by(name="Sculpture").first()
+        with app.test_request_context():
+            events = fetch_calendar_events(area)
+
+        assert events, "expected placeholder shifts when unconnected"
+        assert all(e["placeholder"] for e in events)
+        assert all(e["summary"] and e["start"] and e["end"] for e in events)
+
+    def test_area_without_placeholder_data_returns_empty(self, app):
+        from app.models import ShopArea
+        from app.routes.integration import fetch_calendar_events
+
+        area = ShopArea.query.filter_by(name="Ceramics").first()
+        with app.test_request_context():
+            assert fetch_calendar_events(area) == []
+
+    def test_connected_area_is_ranked_before_placeholder_areas(self, app):
+        from app.models import ShopArea
+        from app.routes.integration import scheduled_areas
+
+        ceramics = ShopArea.query.filter_by(name="Ceramics").first()
+        ceramics.calendar_id = "abc@group.calendar.google.com"
+        db.session.commit()
+
+        areas = ShopArea.query.order_by(ShopArea.name).all()
+        with app.test_request_context():
+            ranked = scheduled_areas(areas, 3)
+
+        assert ranked[0].name == "Ceramics"
+        assert len(ranked) == 3
+
+    def test_card_count_is_configurable(self, client, faculty_seed, app):
+        app.config["GOOGLE_CALENDAR_CARD_COUNT"] = 1
+        faculty_login(client, "testfaculty", "pass")
+        resp = client.get("/faculty/")
+        body = resp.data.decode()
+        # Only the first ranked area's schedule card should render.
+        assert "Upcoming Monitor Shifts" in body
+        assert "DigiLab" in body
+        assert "Woodworking" not in body.split("Upcoming Monitor Shifts")[1].split(
+            "Student Management"
+        )[0]
+
+    def test_shift_time_filters_are_windows_safe(self):
+        from app.utils import shift_day, shift_time
+
+        assert shift_time("2026-02-24T18:00:00") == "6:00pm"
+        assert shift_time("2026-02-24T09:30:00") == "9:30am"
+        assert shift_time("2026-02-24T00:15:00") == "12:15am"
+        assert shift_time("2026-02-24T12:00:00") == "12:00pm"
+        assert shift_day("2026-02-24T18:00:00") == "Tue 24"
+
+    def test_malformed_event_times_do_not_raise(self):
+        from app.utils import shift_day, shift_time
+
+        for bad in ("", "not-a-date", None):
+            assert shift_day(bad) == ""
+            assert shift_time(bad) == ""
+
+
+class TestFacultyShiftCalendars:
+    """Faculty-managed Google Calendar IDs, stored per shop area."""
+
+    def test_calendars_page_lists_all_areas(self, client, faculty_seed):
+        faculty_login(client, "testfaculty", "pass")
+        resp = client.get("/faculty/calendars")
+        assert resp.status_code == 200
+        for area in (b"Sculpture", b"Ceramics", b"Metal Smithing", b"DigiLab", b"Woodworking"):
+            assert area in resp.data
+
+    def test_calendars_page_requires_faculty_login(self, client):
+        resp = client.get("/faculty/calendars", follow_redirects=True)
+        assert b"Faculty Login" in resp.data or b"login" in resp.data.lower()
+
+    def test_connect_calendar_persists_and_promotes_area(self, client, faculty_seed):
+        from app.models import ShopArea
+
+        faculty_login(client, "testfaculty", "pass")
+        ceramics = ShopArea.query.filter_by(name="Ceramics").first()
+        resp = client.post(
+            "/faculty/calendars/update",
+            data={"area_id": ceramics.id, "calendar_id": "c_x1@group.calendar.google.com"},
+            follow_redirects=True,
+        )
+        assert b"Connected Ceramics" in resp.data
+
+        refreshed = ShopArea.query.filter_by(name="Ceramics").first()
+        assert refreshed.calendar_id == "c_x1@group.calendar.google.com"
+        assert refreshed.calendar_connected is True
+
+        # Ceramics has no placeholder shifts, so before connecting it never
+        # appeared on the dashboard. Connecting must surface it.
+        dash = client.get("/faculty/")
+        assert b"Ceramics" in dash.data
+
+    def test_clearing_calendar_id_disconnects_area(self, client, faculty_seed):
+        from app.models import ShopArea
+
+        faculty_login(client, "testfaculty", "pass")
+        area = ShopArea.query.filter_by(name="Sculpture").first()
+        area.calendar_id = "c_y2@group.calendar.google.com"
+        db.session.commit()
+
+        resp = client.post(
+            "/faculty/calendars/update",
+            data={"area_id": area.id, "calendar_id": "   "},
+            follow_redirects=True,
+        )
+        assert b"Disconnected" in resp.data
+        assert ShopArea.query.filter_by(name="Sculpture").first().calendar_id is None
+
+    def test_malformed_calendar_id_is_rejected(self, client, faculty_seed):
+        from app.models import ShopArea
+
+        faculty_login(client, "testfaculty", "pass")
+        area = ShopArea.query.filter_by(name="DigiLab").first()
+        resp = client.post(
+            "/faculty/calendars/update",
+            data={"area_id": area.id, "calendar_id": "my shop calendar"},
+            follow_redirects=True,
+        )
+        assert b"doesn&#39;t look like a calendar ID" in resp.data or b"look like a calendar ID" in resp.data
+        assert ShopArea.query.filter_by(name="DigiLab").first().calendar_id is None
+
+    def test_unknown_area_is_rejected(self, client, faculty_seed):
+        faculty_login(client, "testfaculty", "pass")
+        resp = client.post(
+            "/faculty/calendars/update",
+            data={"area_id": 9999, "calendar_id": "c_z3@group.calendar.google.com"},
+            follow_redirects=True,
+        )
+        assert b"Shop area not found" in resp.data

@@ -39,6 +39,60 @@
     </div>
 </div>
 
+{% if schedule_cards %}
+<div class="d-flex align-items-center justify-content-between mb-2">
+    <h5 class="mb-0">Upcoming Monitor Shifts</h5>
+    <a href="{{ url_for('faculty.calendars') }}" class="btn btn-outline-secondary btn-sm">
+        Manage Calendars
+    </a>
+</div>
+<div class="row">
+    {% for card in schedule_cards %}
+    <div class="col-md-4 mb-3">
+        <div class="card h-100">
+            <div class="card-body">
+                {% set is_sample = card.events and card.events[0].placeholder %}
+                <h6 class="card-title d-flex justify-content-between align-items-start">
+                    <span>{{ card.area.name }}</span>
+                    {% if is_sample %}
+                    <span class="badge bg-secondary">Sample</span>
+                    {% elif card.events %}
+                    <span class="badge bg-success">Live</span>
+                    {% endif %}
+                </h6>
+                {% if is_sample %}
+                <p class="card-text text-muted small mb-2">
+                    Example data — no calendar connected yet.
+                </p>
+                {% endif %}
+                {% if card.events %}
+                <ul class="list-unstyled small mb-0">
+                    {% for event in card.events %}
+                    <li class="d-flex justify-content-between border-bottom py-1">
+                        <span class="text-muted">{{ event.start | shift_day }}</span>
+                        <span>{{ event.start | shift_time }}–{{ event.end | shift_time }}</span>
+                        <span class="{% if event.summary == 'Unassigned' %}text-danger{% endif %}">
+                            {{ event.summary }}
+                        </span>
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% elif card.area.calendar_connected %}
+                <p class="card-text text-muted small mb-0">
+                    Calendar connected — no upcoming shifts found.
+                </p>
+                {% else %}
+                <p class="card-text text-muted small mb-0">
+                    No upcoming shifts scheduled.
+                </p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
 <div class="row">
     <div class="col-md-4 mb-3">
         <div class="card h-100">

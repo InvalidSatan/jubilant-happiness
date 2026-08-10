@@ -5,6 +5,7 @@ from functools import wraps
 
 from flask import (
     Blueprint,
+    current_app,
     render_template,
     redirect,
     url_for,
@@ -14,6 +15,7 @@ from flask import (
 from flask_login import login_user, logout_user, login_required, current_user
 
 from app import db
+from app.routes.integration import fetch_calendar_events, scheduled_areas
 from app.models import (
     Faculty,
     Monitor,
@@ -108,12 +110,21 @@ def dashboard():
         .count()
     )
 
+    # Upcoming monitor shifts per area, from Google Calendar. Falls back to
+    # labelled placeholder shifts until calendars are connected.
+    card_count = current_app.config.get("GOOGLE_CALENDAR_CARD_COUNT", 3)
+    schedule_cards = [
+        {"area": area, "events": fetch_calendar_events(area)}
+        for area in scheduled_areas(areas, card_count)
+    ]
+
     return render_template(
         "faculty/dashboard.html",
         students_count=students_count,
         monitors_count=monitors_count,
         areas=areas,
         trained_count=trained_count,
+        schedule_cards=schedule_cards,
     )
 
 
@@ -573,6 +584,55 @@ def edit_monitor(monitor_id):
     return render_template(
         "faculty/edit_monitor.html", monitor=monitor, areas=areas
     )
+
+
+# ---------------------------------------------------------------------------
+# Shift calendars
+# ---------------------------------------------------------------------------
+@faculty_bp.route("/calendars")
+@faculty_required
+def calendars():
+    areas = ShopArea.query.order_by(ShopArea.name).all()
+    return render_template(
+        "faculty/calendars.html",
+        areas=areas,
+        api_key_set=bool(current_app.config.get("GOOGLE_CALENDAR_API_KEY")),
+    )
+
+
+@faculty_bp.route("/calendars/update", methods=["POST"])
+@faculty_required
+def update_calendar():
+    area_id = request.form.get("area_id", type=int)
+    calendar_id = request.form.get("calendar_id", "").strip()
+
+    area = db.session.get(ShopArea, area_id)
+    if not area:
+        flash("Shop area not found.", "danger")
+        return redirect(url_for("faculty.calendars"))
+
+    # Empty disconnects the area and returns it to placeholder shifts.
+    if not calendar_id:
+        area.calendar_id = None
+        db.session.commit()
+        flash(f"Disconnected the calendar for {area.name}.", "info")
+        return redirect(url_for("faculty.calendars"))
+
+    # Google calendar ids are address-shaped: a primary calendar is the owner's
+    # email, a shared one looks like "<hash>@group.calendar.google.com".
+    if "@" not in calendar_id or " " in calendar_id:
+        flash(
+            "That doesn't look like a calendar ID. Copy it from Google Calendar "
+            "under Settings > Integrate calendar — it ends in "
+            "@group.calendar.google.com or is an @appstate.edu address.",
+            "danger",
+        )
+        return redirect(url_for("faculty.calendars"))
+
+    area.calendar_id = calendar_id
+    db.session.commit()
+    flash(f"Connected {area.name} to its shift calendar.", "success")
+    return redirect(url_for("faculty.calendars"))
 
 
 @faculty_bp.route("/faculty-accounts")
