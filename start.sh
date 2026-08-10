@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# start.sh — Launch Octagon Woodshop Log for beta/test deployment
+# start.sh — Launch Octagon Log for beta/test deployment
 #
 # Usage:
 #   ./start.sh          Start with default settings (port 8080, 2 workers)
@@ -38,7 +38,7 @@ else
         exit 1
     fi
 
-    echo "Starting Octagon Woodshop Log (beta) on port $PORT with $WORKERS workers..."
+    echo "Starting Octagon Log (beta) on port $PORT with $WORKERS workers..."
     export FLASK_CONFIG=production
     exec gunicorn wsgi:app \
         --bind "0.0.0.0:$PORT" \

@@ -1,6 +1,6 @@
 """initial schema
 
-Creates the full Octagon Woodshop Log schema and seeds the five baseline
+Creates the full Octagon Log schema and seeds the five baseline
 shop areas (Sculpture, Ceramics, Metal Smithing, DigiLab, Woodworking).
 
 Revision ID: 0001_initial_schema

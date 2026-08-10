@@ -1,4 +1,4 @@
-"""Entry point for the Octagon Woodshop Log application."""
+"""Entry point for the Octagon Log application."""
 
 from app import create_app
 

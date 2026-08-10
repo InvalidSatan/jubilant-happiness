@@ -1,4 +1,4 @@
-"""Basic smoke tests for the Octagon Woodshop Log application."""
+"""Basic smoke tests for the Octagon Log application."""
 
 import pytest
 

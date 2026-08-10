@@ -1,4 +1,4 @@
-# Deployment Guide — Octagon Woodshop Log
+# Deployment Guide — Octagon Log
 
 Complete steps for hosting the application on the university network with PostgreSQL, accessible to faculty and monitors over HTTPS.
 
@@ -402,7 +402,7 @@ sudo nano /etc/systemd/system/woodshop-log.service
 
 ```ini
 [Unit]
-Description=Octagon Woodshop Log
+Description=Octagon Log
 After=network.target postgresql.service
 Requires=postgresql.service
 
@@ -502,7 +502,7 @@ sudo nano /home/woodshop/backup-db.sh
 
 ```bash
 #!/bin/bash
-# Backup Octagon Woodshop Log PostgreSQL database
+# Backup Octagon Log PostgreSQL database
 BACKUP_DIR="/home/woodshop/backups"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 BACKUP_FILE="$BACKUP_DIR/woodshop_log_$TIMESTAMP.sql.gz"
