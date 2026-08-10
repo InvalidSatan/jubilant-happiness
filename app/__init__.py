@@ -41,6 +41,11 @@ def create_app(config_class=None):
         # Backwards compatibility: bare integer means Monitor
         return db.session.get(Monitor, int(user_id))
 
+    from app.utils import shift_day, shift_time
+
+    app.jinja_env.filters["shift_day"] = shift_day
+    app.jinja_env.filters["shift_time"] = shift_time
+
     from app.routes.auth import auth_bp
     from app.routes.monitor import monitor_bp
     from app.routes.student import student_bp

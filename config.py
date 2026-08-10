@@ -22,6 +22,27 @@ class Config:
     CANVAS_API_URL = os.environ.get("CANVAS_API_URL", "")
     CANVAS_API_TOKEN = os.environ.get("CANVAS_API_TOKEN", "")
 
+    # Google Calendar integration (monitor shift schedules)
+    GOOGLE_CALENDAR_API_URL = os.environ.get(
+        "GOOGLE_CALENDAR_API_URL", "https://www.googleapis.com/calendar/v3"
+    )
+    GOOGLE_CALENDAR_API_KEY = os.environ.get("GOOGLE_CALENDAR_API_KEY", "")
+
+    # Which Google Calendar backs each shop area's shift schedule, as
+    # "Area Name=calendar_id" pairs separated by commas. Example:
+    #   GOOGLE_CALENDAR_IDS="Sculpture=abc123@group.calendar.google.com,DigiLab=def456@..."
+    GOOGLE_CALENDAR_IDS = {
+        pair.split("=", 1)[0].strip(): pair.split("=", 1)[1].strip()
+        for pair in os.environ.get("GOOGLE_CALENDAR_IDS", "").split(",")
+        if "=" in pair
+    }
+
+    # How many area cards to show on the faculty dashboard. Three areas are
+    # scheduled through Google Calendar so far; raise this as more move over.
+    GOOGLE_CALENDAR_CARD_COUNT = int(
+        os.environ.get("GOOGLE_CALENDAR_CARD_COUNT", "3")
+    )
+
 
 class ProductionConfig(Config):
     """Production configuration for university network deployment."""

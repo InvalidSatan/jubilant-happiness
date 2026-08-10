@@ -5,6 +5,7 @@ from functools import wraps
 
 from flask import (
     Blueprint,
+    current_app,
     render_template,
     redirect,
     url_for,
@@ -14,6 +15,7 @@ from flask import (
 from flask_login import login_user, logout_user, login_required, current_user
 
 from app import db
+from app.routes.integration import fetch_calendar_events, scheduled_areas
 from app.models import (
     Faculty,
     Monitor,
@@ -108,12 +110,21 @@ def dashboard():
         .count()
     )
 
+    # Upcoming monitor shifts per area, from Google Calendar. Falls back to
+    # labelled placeholder shifts until calendars are connected.
+    card_count = current_app.config.get("GOOGLE_CALENDAR_CARD_COUNT", 3)
+    schedule_cards = [
+        {"area": area, "events": fetch_calendar_events(area.name)}
+        for area in scheduled_areas(areas, card_count)
+    ]
+
     return render_template(
         "faculty/dashboard.html",
         students_count=students_count,
         monitors_count=monitors_count,
         areas=areas,
         trained_count=trained_count,
+        schedule_cards=schedule_cards,
     )
 
 

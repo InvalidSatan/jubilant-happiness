@@ -863,3 +863,80 @@ class TestFacultyMonitorManagement:
         )
         assert b"New Faculty" in resp.data
         assert Faculty.query.filter_by(username="newfac").first() is not None
+
+
+class TestCalendarPlaceholders:
+    """Google Calendar shift cards on the faculty dashboard."""
+
+    def test_dashboard_shows_three_schedule_cards(self, client, faculty_seed):
+        faculty_login(client, "testfaculty", "pass")
+        resp = client.get("/faculty/")
+        assert resp.status_code == 200
+        assert b"Upcoming Monitor Shifts" in resp.data
+        # Three areas have placeholder schedules seeded.
+        for area in (b"Sculpture", b"DigiLab", b"Woodworking"):
+            assert area in resp.data
+
+    def test_placeholder_shifts_are_labelled_as_samples(self, client, faculty_seed):
+        """Sample data must never be presented as if it were a real schedule."""
+        faculty_login(client, "testfaculty", "pass")
+        resp = client.get("/faculty/")
+        assert b"Sample schedule" in resp.data
+        assert b"Live" not in resp.data
+
+    def test_unconfigured_calendar_returns_placeholders(self, app):
+        from app.routes.integration import fetch_calendar_events
+
+        with app.test_request_context():
+            events = fetch_calendar_events("Sculpture")
+
+        assert events, "expected placeholder shifts when unconfigured"
+        assert all(e["placeholder"] for e in events)
+        assert all(e["summary"] and e["start"] and e["end"] for e in events)
+
+    def test_area_without_placeholder_data_returns_empty(self, app):
+        from app.routes.integration import fetch_calendar_events
+
+        with app.test_request_context():
+            assert fetch_calendar_events("Ceramics") == []
+
+    def test_configured_area_is_ranked_before_placeholder_areas(self, app):
+        from app.models import ShopArea
+        from app.routes.integration import scheduled_areas
+
+        app.config["GOOGLE_CALENDAR_IDS"] = {"Ceramics": "abc@group.calendar.google.com"}
+        areas = ShopArea.query.order_by(ShopArea.name).all()
+
+        with app.test_request_context():
+            ranked = scheduled_areas(areas, 3)
+
+        assert ranked[0].name == "Ceramics"
+        assert len(ranked) == 3
+
+    def test_card_count_is_configurable(self, client, faculty_seed, app):
+        app.config["GOOGLE_CALENDAR_CARD_COUNT"] = 1
+        faculty_login(client, "testfaculty", "pass")
+        resp = client.get("/faculty/")
+        body = resp.data.decode()
+        # Only the first ranked area's schedule card should render.
+        assert "Upcoming Monitor Shifts" in body
+        assert "DigiLab" in body
+        assert "Woodworking" not in body.split("Upcoming Monitor Shifts")[1].split(
+            "Student Management"
+        )[0]
+
+    def test_shift_time_filters_are_windows_safe(self):
+        from app.utils import shift_day, shift_time
+
+        assert shift_time("2026-02-24T18:00:00") == "6:00pm"
+        assert shift_time("2026-02-24T09:30:00") == "9:30am"
+        assert shift_time("2026-02-24T00:15:00") == "12:15am"
+        assert shift_time("2026-02-24T12:00:00") == "12:00pm"
+        assert shift_day("2026-02-24T18:00:00") == "Tue 24"
+
+    def test_malformed_event_times_do_not_raise(self):
+        from app.utils import shift_day, shift_time
+
+        for bad in ("", "not-a-date", None):
+            assert shift_day(bad) == ""
+            assert shift_time(bad) == ""
