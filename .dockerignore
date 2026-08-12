@@ -1,0 +1,32 @@
+# Keep the build context small and keep local state out of image layers.
+# Anything excluded here is unavailable to COPY in the Dockerfile.
+
+# Version control
+.git
+.gitignore
+.github
+
+# Local virtualenvs and caches. Copying a venv would shadow the site-packages
+# installed during the build with packages built for a different platform.
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+dist/
+build/
+
+# Secrets and local databases. .env is supplied at run time (--env-file, or the
+# hosting platform's secret store) and must never be baked into an image layer,
+# where anyone who can pull the image can read it back.
+.env
+instance/
+*.db
+*.sqlite3
+
+# Not needed by the running application.
+tests/
+requirements-dev.txt
+README.md
+DEPLOYMENT.md
