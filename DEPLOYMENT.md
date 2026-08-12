@@ -795,12 +795,18 @@ All optional — the defaults match `start.sh`.
 | `WORKERS` | `2` | Gunicorn worker processes |
 | `GUNICORN_TIMEOUT` | `120` | Seconds before a worker is killed |
 | `FORWARDED_ALLOW_IPS` | `127.0.0.1` | Peers whose `X-Forwarded-*` headers are trusted |
+| `PROXY_HOPS` | `1` | Reverse proxies in front of the app |
 
 `FORWARDED_ALLOW_IPS` matters more in a container than on a VM. Gunicorn
 ignores `X-Forwarded-Proto` from any peer not on this list, and the default of
 `127.0.0.1` is the *container's* loopback — not the reverse proxy, which
 arrives as the bridge gateway or a pod address. Set it to the proxy's address
 in the hosting environment.
+
+`PROXY_HOPS` must match how many proxies actually sit in front of the app: `1`
+for the single Nginx in Section 8, `2` if the hosting platform puts a load
+balancer in front of that. Setting it higher than the real number lets a client
+forge its own address by sending its own `X-Forwarded-For`.
 
 ### A4. Migrations
 

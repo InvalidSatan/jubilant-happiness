@@ -47,8 +47,17 @@ class ProductionConfig(Config):
     # In production the SECRET_KEY env var MUST be set
     SECRET_KEY = os.environ.get("SECRET_KEY")
 
-    # Proxy support — trust X-Forwarded-* headers from reverse proxy
+    # Proxy support — trust X-Forwarded-* headers from reverse proxy.
+    # PREFERRED_URL_SCHEME only covers URLs built outside a request; the
+    # headers themselves are applied by ProxyFix in init_app below.
     PREFERRED_URL_SCHEME = "https"
+
+    # How many reverse proxies sit in front of the app. The Nginx setup in
+    # DEPLOYMENT.md is a single hop, so 1 is right there; container hosting
+    # that adds a load balancer in front of the proxy needs 2. Counting too
+    # high lets a client forge its own address by sending X-Forwarded-For,
+    # since ProxyFix would read a hop the proxy never wrote.
+    PROXY_HOPS = int(os.environ.get("PROXY_HOPS", "1"))
 
     # PostgreSQL connection-pool tuning (via SQLAlchemy)
     SQLALCHEMY_ENGINE_OPTIONS = {
@@ -65,6 +74,19 @@ class ProductionConfig(Config):
             raise RuntimeError(
                 "SECRET_KEY environment variable must be set for production."
             )
+
+        # Without this the app sees every request as coming from the proxy
+        # over plain HTTP: request.remote_addr is the proxy's address and
+        # external URLs are built as http://, even though the client spoke
+        # HTTPS to Nginx. Only applied in production, where a proxy is always
+        # in front — trusting these headers when the app is directly reachable
+        # would let any client claim any address or scheme it liked.
+        from werkzeug.middleware.proxy_fix import ProxyFix
+
+        hops = app.config.get("PROXY_HOPS", 1)
+        app.wsgi_app = ProxyFix(
+            app.wsgi_app, x_for=hops, x_proto=hops, x_host=hops
+        )
 
         db_url = app.config.get("SQLALCHEMY_DATABASE_URI", "")
         if "sqlite" in db_url:
