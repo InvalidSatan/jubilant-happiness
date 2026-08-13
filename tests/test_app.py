@@ -517,6 +517,40 @@ class TestFacultyStudentManagement:
         assert b"New Student" in resp.data
         assert Student.query.filter_by(student_id="900777777").first() is not None
 
+    def test_add_student_rejects_malformed_banner_id(self, client, faculty_seed):
+        """Faculty must not be able to create a student who can't sign in.
+
+        The kiosk and monitor lookup both require exactly 9 digits, so an ID
+        that fails that check would strand the student at the shop bench.
+        """
+        faculty_login(client, "testfaculty", "pass")
+        for bad_id in ("12345", "NOT-A-NUMBER", "9001234567", "90088888a"):
+            resp = client.post(
+                "/faculty/students/add",
+                data={"student_id": bad_id, "display_name": "Broken Record"},
+                follow_redirects=True,
+            )
+            assert b"must be exactly 9 digits" in resp.data
+            assert Student.query.filter_by(student_id=bad_id).first() is None
+
+    def test_faculty_created_student_can_be_signed_in(self, client, faculty_seed, seed):
+        """The roster and the sign-in flows must agree on what a valid ID is."""
+        faculty_login(client, "testfaculty", "pass")
+        client.post(
+            "/faculty/students/add",
+            data={"student_id": "900777123", "display_name": "Signable Student"},
+            follow_redirects=True,
+        )
+        client.get("/faculty/logout")
+
+        login(client, "testmon", "pass")
+        client.post("/monitor/sign-in", data={"area_id": seed["area_id"]},
+                    follow_redirects=True)
+        resp = client.post(
+            "/kiosk/scan", data={"banner_id": "900777123"}, follow_redirects=True
+        )
+        assert b"must be exactly 9 digits" not in resp.data
+
     def test_add_duplicate_student(self, client, faculty_seed):
         faculty_login(client, "testfaculty", "pass")
         resp = client.post(
@@ -663,6 +697,53 @@ class TestFacultyCSVUpload:
         )
         assert b"1 student(s) added" in resp.data
         assert b"1 skipped" in resp.data
+
+    def test_csv_upload_rejects_malformed_banner_id(self, client, faculty_seed):
+        """A malformed ID must not reach the roster.
+
+        The sign-in flows require exactly 9 digits, so a student created with
+        anything else could never be signed in at the shop.
+        """
+        faculty_login(client, "testfaculty", "pass")
+        csv_content = (
+            "banner_id,name\n"
+            "12345,Too Short\n"
+            "NOT-A-NUMBER,Not Numeric\n"
+            "9001234567,Too Long\n"
+        )
+        import io
+        data = {"csv_file": (io.BytesIO(csv_content.encode("utf-8")), "students.csv")}
+        resp = client.post(
+            "/faculty/students/upload",
+            data=data,
+            content_type="multipart/form-data",
+            follow_redirects=True,
+        )
+        assert b"must be exactly 9 digits" in resp.data
+        for bad in ("12345", "NOT-A-NUMBER", "9001234567"):
+            assert Student.query.filter_by(student_id=bad).first() is None
+
+    def test_csv_upload_keeps_good_rows_when_one_is_bad(self, client, faculty_seed):
+        """One bad line should not discard the rest of a long roster."""
+        faculty_login(client, "testfaculty", "pass")
+        csv_content = (
+            "banner_id,name\n"
+            "900777001,Good One\n"
+            "bad-id,Bad One\n"
+            "900777002,Good Two\n"
+        )
+        import io
+        data = {"csv_file": (io.BytesIO(csv_content.encode("utf-8")), "students.csv")}
+        resp = client.post(
+            "/faculty/students/upload",
+            data=data,
+            content_type="multipart/form-data",
+            follow_redirects=True,
+        )
+        assert b"2 student(s) added" in resp.data
+        assert Student.query.filter_by(student_id="900777001").first() is not None
+        assert Student.query.filter_by(student_id="900777002").first() is not None
+        assert Student.query.filter_by(student_id="bad-id").first() is None
 
     def test_csv_upload_alt_columns(self, client, faculty_seed):
         faculty_login(client, "testfaculty", "pass")
@@ -1111,3 +1192,93 @@ class TestDatabaseUrlNormalization:
 
         assert normalize_database_url("") == ""
         assert normalize_database_url(None) is None
+
+
+# ---------------------------------------------------------------------------
+# Reverse proxy configuration
+# ---------------------------------------------------------------------------
+
+
+def _production_cfg(hops):
+    """A ProductionConfig usable against SQLite.
+
+    The MySQL pool options are meaningless to SQLite's StaticPool and
+    create_engine rejects them outright, so they are cleared here.
+    """
+    from config import ProductionConfig
+
+    class Cfg(ProductionConfig):
+        SECRET_KEY = "test-secret"
+        SQLALCHEMY_DATABASE_URI = "sqlite:///:memory:"
+        SQLALCHEMY_ENGINE_OPTIONS = {}
+        PROXY_HOPS = hops
+
+    return Cfg
+
+
+class TestProxyHops:
+    def test_proxy_hops_is_read_from_the_environment(self, monkeypatch):
+        """Regression: PROXY_HOPS must be loaded onto the config class.
+
+        Flask copies only uppercase attributes off the config object, so a
+        lookup done straight from app.config would never see the environment
+        and would silently stay at 1 however the deployment set it.
+        """
+        import importlib
+        import config as config_module
+
+        monkeypatch.setenv("PROXY_HOPS", "2")
+        try:
+            reloaded = importlib.reload(config_module)
+            assert reloaded.ProductionConfig.PROXY_HOPS == 2
+        finally:
+            monkeypatch.delenv("PROXY_HOPS", raising=False)
+            importlib.reload(config_module)
+
+    def test_proxy_hops_reaches_proxyfix_from_the_environment(self, monkeypatch):
+        """The whole path: env var -> config class -> ProxyFix.
+
+        Deliberately does not set PROXY_HOPS on the test config, since doing
+        so would supply the value the bug was failing to read.
+        """
+        import importlib
+        import config as config_module
+
+        monkeypatch.setenv("PROXY_HOPS", "2")
+        try:
+            reloaded = importlib.reload(config_module)
+
+            class Cfg(reloaded.ProductionConfig):
+                SECRET_KEY = "test-secret"
+                SQLALCHEMY_DATABASE_URI = "sqlite:///:memory:"
+                SQLALCHEMY_ENGINE_OPTIONS = {}
+
+            app = create_app(Cfg)
+            assert app.wsgi_app.x_for == 2
+            assert app.wsgi_app.x_proto == 2
+            assert app.wsgi_app.x_host == 2
+        finally:
+            monkeypatch.delenv("PROXY_HOPS", raising=False)
+            importlib.reload(config_module)
+
+    def test_client_ip_resolves_through_two_proxies(self):
+        """Behind two proxies, remote_addr must be the client, not the LB.
+
+        Each proxy appends the address it saw, so a request arriving through
+        a load balancer and then Nginx carries "<client>, <lb>". Trusting
+        only one hop yields the load balancer and loses client attribution
+        in the access log and any per-client audit trail.
+        """
+        from flask import request
+
+        for hops, expected in ((1, "203.0.113.9"), (2, "198.51.100.7")):
+            app = create_app(_production_cfg(hops))
+
+            @app.route("/whoami")
+            def whoami():
+                return request.remote_addr or "none"
+
+            resp = app.test_client().get(
+                "/whoami", headers={"X-Forwarded-For": "198.51.100.7, 203.0.113.9"}
+            )
+            assert resp.get_data(as_text=True) == expected

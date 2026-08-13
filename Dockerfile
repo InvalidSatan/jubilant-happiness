@@ -24,8 +24,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 
 # Dependencies before application code, so editing the app doesn't invalidate
-# the install layer. psycopg2-binary ships prebuilt wheels, so this needs no
-# compiler and no libpq-dev.
+# the install layer. PyMySQL is pure Python, so this needs no compiler and no
+# MySQL client headers.
 COPY requirements.txt .
 RUN pip install -r requirements.txt
 
