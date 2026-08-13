@@ -299,6 +299,17 @@ chmod +x start.sh
 
 This runs gunicorn on `0.0.0.0:8080` with 2 workers. Use `./start.sh --dev` for the Flask debug server instead.
 
+### Or: run it in a container
+
+For hosting that expects an image rather than a host to configure:
+
+```bash
+docker build -t octagon-log .
+docker run --env-file .env -p 8080:8080 octagon-log
+```
+
+Same app, same `.env`, same WSGI entry point — the image runs `gunicorn wsgi:app`. Migrations are not run at startup; apply them as a one-off with `docker run --rm --env-file .env octagon-log flask db upgrade`. [Appendix A of DEPLOYMENT.md](DEPLOYMENT.md#appendix-a--running-in-a-container) covers the details.
+
 ### 4. Run Behind a Reverse Proxy (Recommended)
 
 ```nginx
@@ -536,6 +547,9 @@ Tests use an in-memory SQLite database and disable CSRF. They need neither a bui
 ├── run.py                       # Dev server entry point
 ├── wsgi.py                      # Production entry point (gunicorn)
 ├── start.sh                     # Deployment launcher script
+├── Dockerfile                   # Container image (gunicorn wsgi:app)
+├── gunicorn.conf.py             # Gunicorn settings used by the container
+├── .dockerignore                # Keeps .env, venvs and local DBs out of the image
 ├── seed.py                      # Baseline accounts, equipment, sample students
 ├── seed_demo.py                 # Realistic demo history for walkthroughs
 ├── seed_production.py           # Equipment + interactively-created real admins
