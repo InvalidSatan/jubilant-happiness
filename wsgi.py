@@ -7,7 +7,7 @@ os.environ.setdefault("FLASK_CONFIG", "production")
 
 from app import create_app  # noqa: E402
 
-config_name = os.environ.get("FLASK_CONFIG", "production")
+config_name = os.getenv("FLASK_CONFIG", "production")
 
 if config_name == "production":
     from config import ProductionConfig
