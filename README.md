@@ -120,14 +120,14 @@ A separate portal at `/faculty/login` for the people who own the roster and the 
 |---|---|
 | Language | Python 3.11+ |
 | Web framework | Flask 3.1 |
-| ORM / Database | Flask-SQLAlchemy + SQLite (default) |
+| ORM / Database | Flask-SQLAlchemy — MySQL (Galera) in production, SQLite for local dev |
 | Migrations | Flask-Migrate (Alembic) |
 | Authentication | Flask-Login (session-based, two user types) |
 | Frontend | Jinja2 templates + Bootstrap 5.3 (CDN) |
 | Password hashing | Werkzeug (pbkdf2) |
 | Production server | Gunicorn |
 
-SQLite is the default database and works well for a single-department deployment. `DATABASE_URL` can be pointed at PostgreSQL for multi-user production use — see [DEPLOYMENT.md](DEPLOYMENT.md).
+SQLite is the default for local development and the test suite. Production runs against the departmental **MySQL Galera cluster** — set `DATABASE_URL` to a `mysql://` URI and see [DEPLOYMENT.md](DEPLOYMENT.md). No model or query in the app is database-specific, so the same code runs on both.
 
 > **Note:** Bootstrap is loaded from the jsDelivr CDN. On a machine with no internet access, or a network that blocks the CDN, every page renders as unstyled HTML.
 
@@ -186,7 +186,7 @@ The app will be running at **http://localhost:5000**.
 
 ### About `.env`
 
-**You do not need a `.env` file to run locally**, and copying `.env.example` verbatim will break the app — its `DATABASE_URL` points at a PostgreSQL server that isn't running on your machine. `config.py` already defaults to a working SQLite path.
+**You do not need a `.env` file to run locally**, and copying `.env.example` verbatim will break the app — its `DATABASE_URL` points at the MySQL Galera cluster, which isn't running on your machine. `config.py` already defaults to a working SQLite path.
 
 If you do create one, note that a *relative* SQLite path does not work: Flask-SQLAlchemy resolves it against the instance folder, so `sqlite:///instance/woodshop.db` is looked up at `instance/instance/woodshop.db` and fails with "unable to open database file". Use an absolute path (four slashes) or omit the setting entirely.
 
@@ -249,7 +249,7 @@ If your database is missing columns the current code expects (e.g. `shop_area.ca
 
 ## Deploy to a Server
 
-The short version is below. [DEPLOYMENT.md](DEPLOYMENT.md) covers a full PostgreSQL production setup.
+The short version is below. [DEPLOYMENT.md](DEPLOYMENT.md) covers the full MySQL Galera production setup.
 
 ### 1. Install and Configure
 
@@ -272,8 +272,9 @@ Edit `.env` and set at minimum:
 #   python -c "import secrets; print(secrets.token_hex(32))"
 SECRET_KEY=<paste-your-generated-key-here>
 
-# Point at your PostgreSQL server, or comment out for SQLite
-DATABASE_URL=postgresql://user:password@localhost:5432/woodshop_log
+# Point at the MySQL Galera cluster, or comment out for SQLite.
+# `mysql://` is rewritten to `mysql+pymysql://` automatically.
+DATABASE_URL=mysql://octagon:password@galera.its.appstate.edu:3306/octagon_log
 
 PORT=8080
 WORKERS=2
@@ -371,7 +372,7 @@ The SQLite database lives at `instance/woodshop.db`:
 0 2 * * * cp /path/to/jubilant-happiness/instance/woodshop.db /path/to/backups/woodshop-$(date +\%Y\%m\%d).db
 ```
 
-For PostgreSQL backups, see [DEPLOYMENT.md](DEPLOYMENT.md).
+For MySQL backups, see [DEPLOYMENT.md](DEPLOYMENT.md) — note that the Galera cluster is backed up by ITS at the cluster level.
 
 ## Usage Guide
 
@@ -468,16 +469,18 @@ Banner, ASULearn, and Canvas all return an empty list when unconfigured, so noth
 
 All configuration is in `config.py` and can be overridden via environment variables (or a `.env` file).
 
+Every value below is read with `os.getenv()` at import time, and no secret has a committed default — `SECRET_KEY` falls back to an obvious dev placeholder that the production config refuses to start without, and every credential defaults to empty. A containerized deployment can therefore skip `.env` entirely and inject these as environment variables.
+
 | Variable | Default | Description |
 |---|---|---|
 | `SECRET_KEY` | `dev-key-change-in-production` | Flask session secret. **Must** be set in production. |
-| `DATABASE_URL` | absolute path to `instance/woodshop.db` | SQLAlchemy database URI. |
+| `DATABASE_URL` | absolute path to `instance/woodshop.db` | SQLAlchemy database URI. A `mysql://` scheme is rewritten to `mysql+pymysql://` and defaulted to `charset=utf8mb4`. |
 | `PORT` | `8080` | Server port (used by `start.sh`). |
 | `WORKERS` | `2` | Gunicorn worker count (used by `start.sh`). |
-| `DB_POOL_SIZE` | `5` | PostgreSQL pool size (production config only). |
-| `DB_MAX_OVERFLOW` | `10` | PostgreSQL pool overflow (production config only). |
-| `DB_POOL_TIMEOUT` | `30` | PostgreSQL pool timeout (production config only). |
-| `DB_POOL_RECYCLE` | `1800` | PostgreSQL connection recycle seconds (production config only). |
+| `DB_POOL_SIZE` | `5` | MySQL pool size, per process (production config only). |
+| `DB_MAX_OVERFLOW` | `10` | MySQL pool overflow (production config only). |
+| `DB_POOL_TIMEOUT` | `30` | MySQL pool timeout (production config only). |
+| `DB_POOL_RECYCLE` | `1800` | Connection recycle seconds; keep below the cluster's `wait_timeout` (production config only). |
 | `BANNER_API_URL` | *(empty)* | Banner SIS API base URL. |
 | `BANNER_API_KEY` | *(empty)* | Bearer token for Banner API. |
 | `ASULEARN_API_URL` | *(empty)* | ASULearn Moodle Web Services endpoint. |
@@ -554,7 +557,7 @@ Tests use an in-memory SQLite database and disable CSRF. They need neither a bui
 ├── seed_demo.py                 # Realistic demo history for walkthroughs
 ├── seed_production.py           # Equipment + interactively-created real admins
 ├── demo_students_sample.csv     # Sample file for the faculty CSV upload
-├── DEPLOYMENT.md                # Full PostgreSQL production deployment guide
+├── DEPLOYMENT.md                # Full MySQL Galera production deployment guide
 ├── .env.example                 # Environment variable template
 └── .gitignore
 ```
@@ -571,7 +574,7 @@ Tests use an in-memory SQLite database and disable CSRF. They need neither a bui
 - Kiosk mode for tablet self-service
 - Reporting with CSV export (visits, coverage, safety)
 - Faculty portal with roster management and CSV student upload
-- Production deployment support (gunicorn, PostgreSQL, startup script)
+- Production deployment support (gunicorn, MySQL Galera, startup script)
 - Database migrations
 
 ### In Progress

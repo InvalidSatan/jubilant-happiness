@@ -1045,3 +1045,69 @@ class TestFacultyShiftCalendars:
             follow_redirects=True,
         )
         assert b"Shop area not found" in resp.data
+
+
+# ---------------------------------------------------------------------------
+# Database URL handling
+# ---------------------------------------------------------------------------
+
+
+class TestDatabaseUrlNormalization:
+    """DATABASE_URL is written as plain `mysql://` by deployment.
+
+    SQLAlchemy reads that scheme as "use MySQLdb", a C extension the project
+    does not install, so the app rewrites it to name PyMySQL instead.
+    """
+
+    def test_mysql_scheme_gets_pymysql_driver(self):
+        from config import normalize_database_url
+
+        url = normalize_database_url(
+            "mysql://octagon:pw@galera.example.edu:3306/octagon_log"
+        )
+        assert url.startswith("mysql+pymysql://")
+
+    def test_charset_defaults_to_utf8mb4(self):
+        from config import normalize_database_url
+
+        # Without utf8mb4, MySQL rejects emoji and many non-Latin names.
+        assert "charset=utf8mb4" in normalize_database_url(
+            "mysql://octagon:pw@host/octagon_log"
+        )
+
+    def test_existing_query_params_are_preserved(self):
+        from config import normalize_database_url
+
+        url = normalize_database_url(
+            "mysql://octagon:pw@host/octagon_log?ssl_ca=/etc/ssl/ca.pem"
+        )
+        assert "ssl_ca=/etc/ssl/ca.pem" in url
+        assert "charset=utf8mb4" in url
+
+    def test_explicit_charset_is_not_overridden(self):
+        from config import normalize_database_url
+
+        url = normalize_database_url(
+            "mysql://octagon:pw@host/octagon_log?charset=latin1"
+        )
+        assert "charset=latin1" in url
+        assert "utf8mb4" not in url
+
+    def test_explicit_pymysql_driver_is_left_alone(self):
+        from config import normalize_database_url
+
+        url = normalize_database_url("mysql+pymysql://octagon:pw@host/octagon_log")
+        assert url.startswith("mysql+pymysql://")
+        assert "mysql+pymysql+pymysql" not in url
+
+    def test_sqlite_url_is_untouched(self):
+        from config import normalize_database_url
+
+        url = "sqlite:////abs/path/woodshop.db"
+        assert normalize_database_url(url) == url
+
+    def test_empty_url_is_untouched(self):
+        from config import normalize_database_url
+
+        assert normalize_database_url("") == ""
+        assert normalize_database_url(None) is None
