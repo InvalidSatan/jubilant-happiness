@@ -28,6 +28,8 @@ Complete steps for hosting the application on the university network against the
 14. [Maintenance & Updates](#14-maintenance--updates)
 15. [Troubleshooting](#15-troubleshooting)
 
+- [Appendix A — Running in a Container](#appendix-a--running-in-a-container)
+
 ---
 
 ## 1. Overview
@@ -872,3 +874,105 @@ flask db upgrade
 python seed_production.py
 sudo systemctl start woodshop-log
 ```
+
+---
+
+## Appendix A — Running in a Container
+
+Sections 2–9 describe the app running directly on a VM under systemd. This
+appendix is the alternative: the same app in a container, for hosting that
+expects an image rather than a host to configure. Sections 1 (why PostgreSQL),
+3 (database setup), 11 (backups) and 13 (creating accounts) still apply — a
+container changes how the app is *started*, not what it needs.
+
+### A1. What the image does
+
+`Dockerfile` builds on `python:3.12-slim` and starts:
+
+```
+gunicorn wsgi:app --config gunicorn.conf.py
+```
+
+`wsgi:app` is the WSGI target — the `app` object in `wsgi.py`, which is the
+same entry point systemd uses in Section 9. Anything asking for a WSGI
+application path (a `module:variable` string, often shown in examples as
+`example.main:app`) wants exactly `wsgi:app` for this project.
+
+Notable properties:
+
+| | |
+|---|---|
+| Runs as | the unprivileged `octagon` user, not root |
+| Listens on | `$PORT`, default `8080` |
+| Logs to | stdout/stderr, collected by the container runtime |
+| Health check | `GET /login` every 30s, via `urllib` |
+| Migrations | **not** run at startup — see A4 |
+
+### A2. Build and run
+
+```bash
+docker build -t octagon-log .
+docker run --env-file .env -p 8080:8080 octagon-log
+```
+
+`.env` is the same file described in Section 6. It is excluded from the image
+by `.dockerignore` and must be supplied at run time — never build secrets into
+an image layer, where anyone who can pull the image can read them back.
+
+`DATABASE_URL` must point at a PostgreSQL instance the container can reach.
+`localhost` inside a container is the container itself, not the host, so a
+database running on the Docker host is reached at `host.docker.internal` (or
+the bridge gateway address) rather than `localhost`.
+
+### A3. Tuning
+
+All optional — the defaults match `start.sh`.
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `PORT` | `8080` | Port Gunicorn binds |
+| `WORKERS` | `2` | Gunicorn worker processes |
+| `GUNICORN_TIMEOUT` | `120` | Seconds before a worker is killed |
+| `FORWARDED_ALLOW_IPS` | `127.0.0.1` | Peers whose `X-Forwarded-*` headers are trusted |
+| `PROXY_HOPS` | `1` | Reverse proxies in front of the app |
+
+`FORWARDED_ALLOW_IPS` matters more in a container than on a VM. Gunicorn
+ignores `X-Forwarded-Proto` from any peer not on this list, and the default of
+`127.0.0.1` is the *container's* loopback — not the reverse proxy, which
+arrives as the bridge gateway or a pod address. Set it to the proxy's address
+in the hosting environment.
+
+`PROXY_HOPS` must match how many proxies actually sit in front of the app: `1`
+for the single Nginx in Section 8, `2` if the hosting platform puts a load
+balancer in front of that. Setting it higher than the real number lets a client
+forge its own address by sending its own `X-Forwarded-For`.
+
+### A4. Migrations
+
+The container does not run `flask db upgrade` at startup, because two
+containers starting at once would race on the same migration. Run it as a
+one-off against the same image, before rolling out a release that changes the
+schema:
+
+```bash
+docker run --rm --env-file .env octagon-log flask db upgrade
+```
+
+`FLASK_APP=run.py` is already set in the image, so no export is needed. The
+Section 5b note about `flask db stamp head` on a pre-migration database applies
+here too.
+
+Section 5c's `seed_production.py` is interactive and runs the same way, with
+`-it`:
+
+```bash
+docker run --rm -it --env-file .env octagon-log python seed_production.py
+```
+
+### A5. Reverse proxy
+
+Section 8's Nginx config is unchanged — it still proxies to `127.0.0.1:8080`,
+which is now the published container port rather than a Gunicorn process on the
+host. If the hosting platform terminates TLS and proxies for you, that section
+can be skipped entirely; set `FORWARDED_ALLOW_IPS` (A3) so the app sees the
+original scheme.
