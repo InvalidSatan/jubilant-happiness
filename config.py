@@ -84,6 +84,15 @@ class ProductionConfig(Config):
     # headers themselves are applied by ProxyFix in init_app below.
     PREFERRED_URL_SCHEME = "https"
 
+    # How many reverse proxies sit in front of the app. Must be read here
+    # rather than in init_app: Flask only loads uppercase attributes off the
+    # config class, so a value looked up straight from app.config would never
+    # see the environment and would silently stay at 1.
+    #
+    # Setting this higher than the number of proxies actually deployed lets a
+    # client forge its own address by sending X-Forwarded-For itself.
+    PROXY_HOPS = int(os.getenv("PROXY_HOPS", "1"))
+
     # MySQL connection-pool tuning (via SQLAlchemy).
     #
     # pool_recycle matters more against Galera than it did against a single

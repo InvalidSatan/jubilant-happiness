@@ -1192,3 +1192,93 @@ class TestDatabaseUrlNormalization:
 
         assert normalize_database_url("") == ""
         assert normalize_database_url(None) is None
+
+
+# ---------------------------------------------------------------------------
+# Reverse proxy configuration
+# ---------------------------------------------------------------------------
+
+
+def _production_cfg(hops):
+    """A ProductionConfig usable against SQLite.
+
+    The MySQL pool options are meaningless to SQLite's StaticPool and
+    create_engine rejects them outright, so they are cleared here.
+    """
+    from config import ProductionConfig
+
+    class Cfg(ProductionConfig):
+        SECRET_KEY = "test-secret"
+        SQLALCHEMY_DATABASE_URI = "sqlite:///:memory:"
+        SQLALCHEMY_ENGINE_OPTIONS = {}
+        PROXY_HOPS = hops
+
+    return Cfg
+
+
+class TestProxyHops:
+    def test_proxy_hops_is_read_from_the_environment(self, monkeypatch):
+        """Regression: PROXY_HOPS must be loaded onto the config class.
+
+        Flask copies only uppercase attributes off the config object, so a
+        lookup done straight from app.config would never see the environment
+        and would silently stay at 1 however the deployment set it.
+        """
+        import importlib
+        import config as config_module
+
+        monkeypatch.setenv("PROXY_HOPS", "2")
+        try:
+            reloaded = importlib.reload(config_module)
+            assert reloaded.ProductionConfig.PROXY_HOPS == 2
+        finally:
+            monkeypatch.delenv("PROXY_HOPS", raising=False)
+            importlib.reload(config_module)
+
+    def test_proxy_hops_reaches_proxyfix_from_the_environment(self, monkeypatch):
+        """The whole path: env var -> config class -> ProxyFix.
+
+        Deliberately does not set PROXY_HOPS on the test config, since doing
+        so would supply the value the bug was failing to read.
+        """
+        import importlib
+        import config as config_module
+
+        monkeypatch.setenv("PROXY_HOPS", "2")
+        try:
+            reloaded = importlib.reload(config_module)
+
+            class Cfg(reloaded.ProductionConfig):
+                SECRET_KEY = "test-secret"
+                SQLALCHEMY_DATABASE_URI = "sqlite:///:memory:"
+                SQLALCHEMY_ENGINE_OPTIONS = {}
+
+            app = create_app(Cfg)
+            assert app.wsgi_app.x_for == 2
+            assert app.wsgi_app.x_proto == 2
+            assert app.wsgi_app.x_host == 2
+        finally:
+            monkeypatch.delenv("PROXY_HOPS", raising=False)
+            importlib.reload(config_module)
+
+    def test_client_ip_resolves_through_two_proxies(self):
+        """Behind two proxies, remote_addr must be the client, not the LB.
+
+        Each proxy appends the address it saw, so a request arriving through
+        a load balancer and then Nginx carries "<client>, <lb>". Trusting
+        only one hop yields the load balancer and loses client attribution
+        in the access log and any per-client audit trail.
+        """
+        from flask import request
+
+        for hops, expected in ((1, "203.0.113.9"), (2, "198.51.100.7")):
+            app = create_app(_production_cfg(hops))
+
+            @app.route("/whoami")
+            def whoami():
+                return request.remote_addr or "none"
+
+            resp = app.test_client().get(
+                "/whoami", headers={"X-Forwarded-For": "198.51.100.7, 203.0.113.9"}
+            )
+            assert resp.get_data(as_text=True) == expected
