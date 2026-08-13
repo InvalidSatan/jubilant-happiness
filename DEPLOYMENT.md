@@ -1,6 +1,12 @@
 # Deployment Guide — Octagon Log
 
-Complete steps for hosting the application on the university network with PostgreSQL, accessible to faculty and monitors over HTTPS.
+Complete steps for hosting the application on the university network against the departmental MySQL Galera cluster, accessible to faculty and monitors over HTTPS.
+
+> **Secrets come from the environment.** Every credential the app reads —
+> `SECRET_KEY`, `DATABASE_URL`, and the integration tokens — is read with
+> `os.getenv()` at startup and has no in-repo default. Nothing secret is
+> committed. Under the container deployment, ITS injects these as environment
+> variables; on a plain VM they come from `.env`.
 
 ---
 
@@ -8,7 +14,7 @@ Complete steps for hosting the application on the university network with Postgr
 
 1. [Overview](#1-overview)
 2. [Server Prerequisites](#2-server-prerequisites)
-3. [PostgreSQL Database Setup](#3-postgresql-database-setup)
+3. [MySQL Galera Database Setup](#3-mysql-galera-database-setup)
 4. [Application Setup](#4-application-setup)
 5. [Initialize the Database](#5-initialize-the-database)
 6. [Configure the Application](#6-configure-the-application)
@@ -40,22 +46,29 @@ Complete steps for hosting the application on the university network with Postgr
          └──────────────┬──────────────┘
                         │
          ┌──────────────┴──────────────┐
-         │     PostgreSQL (5432)       │
-         │  woodshop_log database      │
-         │  local socket, always on    │
+         │   MySQL Galera cluster      │
+         │   (3306, via load balancer) │
+         │   octagon_log database      │
+         │   managed by ITS            │
          └─────────────────────────────┘
 ```
 
-**Why PostgreSQL instead of SQLite:**
+The database is **not** installed on the application server. It is the
+departmental MySQL Galera cluster, which ITS runs and backs up; the app
+reaches it over the network with credentials supplied as environment
+variables.
 
-| Concern | SQLite | PostgreSQL |
+**Why the Galera cluster instead of SQLite:**
+
+| Concern | SQLite | MySQL Galera |
 |---|---|---|
 | Concurrent users | Single writer, blocks under load | Hundreds of concurrent read/write |
-| Data durability | File-level, no crash recovery | WAL + point-in-time recovery |
-| Backups while running | Must copy file (risk of corruption) | `pg_dump` is safe during writes |
+| Data durability | File-level, no crash recovery | Synchronous replication across nodes |
+| Availability | Dies with the app server | Survives a node failure |
+| Backups while running | Must copy file (risk of corruption) | Handled by ITS on the cluster |
 | Connection pooling | N/A | Built-in, tunable |
-| Network access | File on disk only | TCP socket, can separate DB server later |
-| University IT standards | Not typical for production | Standard, well-supported |
+| Network access | File on disk only | TCP, app and database scale separately |
+| University IT standards | Not typical for production | Standard, ITS-supported |
 
 ---
 
@@ -75,7 +88,7 @@ Request a Linux VM from university IT (or use an existing departmental server).
 ```bash
 sudo apt update
 sudo apt install -y python3 python3-venv python3-pip \
-                    postgresql postgresql-contrib \
+                    mysql-client \
                     nginx certbot python3-certbot-nginx \
                     git
 ```
@@ -84,103 +97,112 @@ sudo apt install -y python3 python3-venv python3-pip \
 
 ```bash
 sudo dnf install -y python3 python3-pip \
-                    postgresql-server postgresql-contrib \
+                    mysql \
                     nginx certbot python3-certbot-nginx \
                     git
-sudo postgresql-setup --initdb
-sudo systemctl enable --now postgresql
 ```
+
+Only the MySQL **client** is needed — the server lives on the Galera cluster.
+The app's driver (PyMySQL) is pure Python, so there are no database header
+packages or compilers to install.
 
 Verify versions:
 
 ```bash
 python3 --version   # 3.11+
-psql --version      # 14+
+mysql --version     # 8.0+
 nginx -v            # 1.18+
+```
+
+Confirm the app server can reach the cluster (ask ITS to open the path if not):
+
+```bash
+nc -zv galera.its.appstate.edu 3306
 ```
 
 ---
 
-## 3. PostgreSQL Database Setup
+## 3. MySQL Galera Database Setup
 
-### 3a. Create the database and user
+The cluster is managed by ITS, so this section is mostly *requesting* the
+right thing rather than installing it.
 
-```bash
-# Switch to the postgres system user
-sudo -u postgres psql
-```
+### 3a. What to request from ITS
 
-Run the following SQL inside the `psql` prompt:
+Ask for a database and a dedicated user on the Galera cluster:
 
 ```sql
--- Create a dedicated database user
-CREATE USER woodshop WITH PASSWORD 'PICK_A_STRONG_PASSWORD_HERE';
+-- Run by the cluster DBA, on one node (Galera replicates it to the rest)
+CREATE DATABASE octagon_log
+    CHARACTER SET utf8mb4
+    COLLATE utf8mb4_unicode_ci;
 
--- Create the database owned by that user
-CREATE DATABASE woodshop_log OWNER woodshop;
+CREATE USER 'octagon'@'%' IDENTIFIED BY 'STRONG_PASSWORD_HERE';
 
--- Grant privileges
-GRANT ALL PRIVILEGES ON DATABASE woodshop_log TO woodshop;
-
--- Exit
-\q
+GRANT ALL PRIVILEGES ON octagon_log.* TO 'octagon'@'%';
+FLUSH PRIVILEGES;
 ```
 
-> **IMPORTANT:** Replace `PICK_A_STRONG_PASSWORD_HERE` with a real password.
-> Generate one with: `python3 -c "import secrets; print(secrets.token_urlsafe(24))"`
+Two details matter and are easy to get wrong:
 
-### 3b. Allow local password authentication
+- **`utf8mb4`, not `utf8`.** MySQL's legacy `utf8` is a three-byte encoding
+  that cannot represent emoji or many non-Latin names. Student names and care
+  notes are free text, so a `utf8` database will throw
+  *"Incorrect string value"* on perfectly ordinary input.
+- **The app needs `ALTER`/`CREATE`/`DROP`, not just DML.** Schema changes ship
+  as Alembic migrations that run against this database. If ITS prefers to keep
+  DDL rights off the runtime account, request a second account for migrations
+  and run `flask db upgrade` with that one.
 
-Edit the PostgreSQL client auth config:
+### 3b. Application account privileges
 
-```bash
-sudo nano /etc/postgresql/*/main/pg_hba.conf    # Ubuntu/Debian
-# or
-sudo nano /var/lib/pgsql/data/pg_hba.conf        # RHEL/Rocky
-```
-
-Ensure there is a line that allows local password auth for the `woodshop` user. Add or confirm:
-
-```
-# TYPE  DATABASE        USER        ADDRESS         METHOD
-local   woodshop_log    woodshop                    scram-sha-256
-host    woodshop_log    woodshop    127.0.0.1/32    scram-sha-256
-```
-
-Restart PostgreSQL:
-
-```bash
-sudo systemctl restart postgresql
-```
+The app's own connection needs `SELECT, INSERT, UPDATE, DELETE` on
+`octagon_log.*`. Grant `CREATE, ALTER, DROP, INDEX, REFERENCES` as well if the
+same account will run migrations.
 
 ### 3c. Verify the connection
 
+From the application server (or a container in the same network):
+
 ```bash
-psql -U woodshop -d woodshop_log -h 127.0.0.1 -c "SELECT 1;"
+mysql -h galera.its.appstate.edu -P 3306 -u octagon -p octagon_log -e "SELECT 1;"
 ```
 
-You should see a result of `1`. If this fails, check the password and `pg_hba.conf`.
+You should see a result of `1`. Also confirm the character set came out right:
 
-### 3d. PostgreSQL performance tuning (optional)
-
-Edit `/etc/postgresql/*/main/postgresql.conf` for a small-to-medium workload:
-
-```ini
-# Memory
-shared_buffers = 256MB          # 25% of RAM, up to 512MB
-effective_cache_size = 1GB      # 50-75% of RAM
-work_mem = 16MB
-
-# WAL / Durability
-wal_level = replica
-max_wal_size = 1GB
-checkpoint_completion_target = 0.9
-
-# Connections
-max_connections = 50            # App uses pool_size=5 per worker, plenty of headroom
+```bash
+mysql -h galera.its.appstate.edu -u octagon -p -e \
+  "SELECT default_character_set_name, default_collation_name
+     FROM information_schema.schemata WHERE schema_name='octagon_log';"
 ```
 
-Restart after changes: `sudo systemctl restart postgresql`
+Expect `utf8mb4` / `utf8mb4_unicode_ci`.
+
+### 3d. Galera-specific caveats
+
+Galera is multi-master synchronous replication, which differs from a single
+MySQL server in ways that affect this app:
+
+- **Route writes to one node.** When two nodes commit conflicting writes,
+  Galera resolves it at commit time by aborting one with a deadlock error
+  (`1213`). Point `DATABASE_URL` at the load balancer's single-writer VIP, or
+  at one node, rather than round-robining writes across all three.
+- **Every table needs a primary key.** Galera's row-based replication requires
+  it. Every table in this schema already has one — keep it that way when adding
+  models.
+- **InnoDB only.** Galera does not replicate MyISAM. This is the MySQL 8
+  default, so it only becomes a problem if someone overrides it.
+- **Migrations briefly block the cluster.** Schema changes replicate under
+  Total Order Isolation, which pauses writes cluster-wide while the DDL runs.
+  The tables here are small enough that this is milliseconds, but run
+  `flask db upgrade` during a quiet window anyway.
+- **A failed migration does not roll back.** MySQL commits DDL implicitly, so
+  unlike PostgreSQL a migration that dies halfway leaves the schema partly
+  changed. Take a backup before upgrading and be prepared to fix forward.
+- **Idle connections get dropped.** Both the load balancer and MySQL's
+  `wait_timeout` will close idle connections out from under the pool. The app
+  sets `pool_pre_ping` and `pool_recycle` (default 1800s) to cope; if the
+  cluster's `wait_timeout` is lower than 1800, lower `DB_POOL_RECYCLE` to match.
 
 ---
 
@@ -210,10 +232,10 @@ pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-Verify PostgreSQL driver is installed:
+Verify the MySQL driver is installed:
 
 ```bash
-python3 -c "import psycopg2; print('psycopg2 OK:', psycopg2.__version__)"
+python3 -c "import pymysql; print('PyMySQL OK')"
 ```
 
 ---
@@ -234,11 +256,17 @@ Set these values in `.env`:
 SECRET_KEY=<your-generated-secret-key>
 
 # REQUIRED — must match the user/password/database from Step 3a
-DATABASE_URL=postgresql://woodshop:PICK_A_STRONG_PASSWORD_HERE@localhost:5432/woodshop_log
+DATABASE_URL=mysql://octagon:STRONG_PASSWORD_HERE@galera.its.appstate.edu:3306/octagon_log
 
 PORT=8080
 WORKERS=2
 ```
+
+> The plain `mysql://` scheme is what you write. The app rewrites it to
+> `mysql+pymysql://` at startup (SQLAlchemy would otherwise look for the
+> MySQLdb C extension, which is not installed) and appends
+> `?charset=utf8mb4` if you have not set a charset yourself. Writing
+> `mysql+pymysql://` explicitly also works.
 
 ### 5b. Apply migrations
 
@@ -275,7 +303,7 @@ You will be prompted to create:
 ### 5d. Verify tables were created
 
 ```bash
-psql -U woodshop -d woodshop_log -h 127.0.0.1 -c "\dt"
+mysql -h galera.its.appstate.edu -u octagon -p octagon_log -e "SHOW TABLES;"
 ```
 
 You should see tables: `alembic_version`, `shop_area`, `equipment`, `monitor`, `faculty`, `student`, `warning`, `monitor_session`, `student_visit`, `monitor_areas`, `student_training`.
@@ -291,7 +319,7 @@ The full `.env` file for production:
 ```bash
 # --- REQUIRED ---
 SECRET_KEY=<64-char-hex-string>
-DATABASE_URL=postgresql://woodshop:YOUR_PASSWORD@localhost:5432/woodshop_log
+DATABASE_URL=mysql://octagon:YOUR_PASSWORD@galera.its.appstate.edu:3306/octagon_log
 
 # --- Server ---
 PORT=8080
@@ -301,7 +329,9 @@ WORKERS=2
 # DB_POOL_SIZE=5          # persistent connections per worker
 # DB_MAX_OVERFLOW=10      # extra connections under burst load
 # DB_POOL_TIMEOUT=30      # seconds to wait for a connection
-# DB_POOL_RECYCLE=1800    # recycle connections every 30 minutes
+# DB_POOL_RECYCLE=1800    # recycle connections every 30 minutes;
+#                         # must stay below the cluster's wait_timeout
+#                         # and the load balancer's idle timeout
 
 # --- Integrations (configure when ready) ---
 # BANNER_API_URL=https://banner.appstate.edu/api
@@ -310,7 +340,7 @@ WORKERS=2
 # ASULEARN_API_TOKEN=
 ```
 
-**Connection pool math:** With `WORKERS=2` and `DB_POOL_SIZE=5`, the app maintains 10 persistent database connections plus up to 20 overflow — easily handles 100+ concurrent users.
+**Connection pool math:** With `WORKERS=2` and `DB_POOL_SIZE=5`, the app maintains 10 persistent database connections plus up to 20 overflow — easily handles 100+ concurrent users. Note that the pool is *per process*: scaling to N containers or N Gunicorn workers multiplies the connection count, and the Galera cluster's `max_connections` is shared with every other application on it. Multiply before scaling up, and tell ITS the expected ceiling.
 
 ---
 
@@ -403,8 +433,7 @@ sudo nano /etc/systemd/system/woodshop-log.service
 ```ini
 [Unit]
 Description=Octagon Log
-After=network.target postgresql.service
-Requires=postgresql.service
+After=network.target
 
 [Service]
 Type=exec
@@ -480,19 +509,35 @@ allow 10.0.0.0/8;       # VPN / internal
 deny all;
 ```
 
-### 10c. PostgreSQL — keep it local only
+### 10c. Database access
 
-PostgreSQL should only listen on localhost. Verify in `postgresql.conf`:
+The Galera cluster is reached over the network rather than a local socket, so
+the database is no longer sealed off by "localhost only". Two things to confirm
+with ITS:
 
-```ini
-listen_addresses = 'localhost'    # This is the default — do NOT change to '*'
+- The cluster accepts connections **only** from the application servers'
+  addresses (or the container network), not from campus at large.
+- The `octagon` user is scoped as tightly as the cluster's policy allows —
+  `'octagon'@'10.x.%'` rather than `'octagon'@'%'` where practical.
+
+If the connection crosses an untrusted network segment, require TLS and point
+the app at the CA bundle:
+
+```bash
+DATABASE_URL=mysql://octagon:PASSWORD@galera.its.appstate.edu:3306/octagon_log?ssl_ca=/etc/ssl/certs/ca-certificates.crt
 ```
 
-The database is never exposed to the network. Only the application on the same server connects to it.
+Query parameters set this way are passed through to the driver — the app only
+adds `charset` when you have not specified one.
 
 ---
 
 ## 11. Automated Backups
+
+**Check with ITS first.** The Galera cluster is almost certainly backed up at
+the cluster level already. The script below is an *application-level* dump —
+useful as a pre-migration safety net and for restoring a single table without
+involving the DBA, not as the primary backup.
 
 ### 11a. Database backup script
 
@@ -502,19 +547,21 @@ sudo nano /home/woodshop/backup-db.sh
 
 ```bash
 #!/bin/bash
-# Backup Octagon Log PostgreSQL database
+# Application-level dump of the Octagon Log database
 BACKUP_DIR="/home/woodshop/backups"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-BACKUP_FILE="$BACKUP_DIR/woodshop_log_$TIMESTAMP.sql.gz"
+BACKUP_FILE="$BACKUP_DIR/octagon_log_$TIMESTAMP.sql.gz"
 
 mkdir -p "$BACKUP_DIR"
 
-# pg_dump is safe to run while the database is in use
-PGPASSWORD="YOUR_DB_PASSWORD" pg_dump -U woodshop -h 127.0.0.1 woodshop_log \
-    | gzip > "$BACKUP_FILE"
+# --single-transaction takes a consistent InnoDB snapshot without locking
+# writers. Do NOT add --lock-tables against Galera: it stalls the cluster.
+mysqldump --defaults-file=/home/woodshop/.my.cnf \
+    --single-transaction --quick --routines --default-character-set=utf8mb4 \
+    octagon_log | gzip > "$BACKUP_FILE"
 
 # Keep only the last 30 backups
-ls -t "$BACKUP_DIR"/woodshop_log_*.sql.gz | tail -n +31 | xargs -r rm
+ls -t "$BACKUP_DIR"/octagon_log_*.sql.gz | tail -n +31 | xargs -r rm
 
 echo "Backup complete: $BACKUP_FILE ($(du -h "$BACKUP_FILE" | cut -f1))"
 ```
@@ -523,11 +570,16 @@ echo "Backup complete: $BACKUP_FILE ($(du -h "$BACKUP_FILE" | cut -f1))"
 chmod +x /home/woodshop/backup-db.sh
 ```
 
-> **Tip:** Instead of storing the password in the script, create a `~/.pgpass` file:
+> **Keep the password out of the script and off the process list.** Anything
+> passed as `-pPASSWORD` is visible in `ps` to every user on the box. Put the
+> credentials in `/home/woodshop/.my.cnf` instead:
+> ```ini
+> [client]
+> host = galera.its.appstate.edu
+> user = octagon
+> password = YOUR_DB_PASSWORD
 > ```
-> localhost:5432:woodshop_log:woodshop:YOUR_DB_PASSWORD
-> ```
-> `chmod 600 ~/.pgpass` — then remove the `PGPASSWORD=` from the script.
+> then `chmod 600 /home/woodshop/.my.cnf`.
 
 ### 11b. Schedule nightly backups with cron
 
@@ -544,15 +596,25 @@ Add:
 
 ### 11c. Restoring from a backup
 
-```bash
-# Drop and recreate the database
-sudo -u postgres psql -c "DROP DATABASE woodshop_log;"
-sudo -u postgres psql -c "CREATE DATABASE woodshop_log OWNER woodshop;"
+Restoring replicates to every node in the cluster, so stop the app first and
+be certain of the dump you are restoring.
 
-# Restore
-gunzip -c /home/woodshop/backups/woodshop_log_20260225_020000.sql.gz \
-    | psql -U woodshop -h 127.0.0.1 woodshop_log
+```bash
+sudo systemctl stop woodshop-log
+
+mysql --defaults-file=/home/woodshop/.my.cnf -e \
+  "DROP DATABASE octagon_log;
+   CREATE DATABASE octagon_log CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+
+gunzip -c /home/woodshop/backups/octagon_log_20260225_020000.sql.gz \
+    | mysql --defaults-file=/home/woodshop/.my.cnf octagon_log
+
+sudo systemctl start woodshop-log
 ```
+
+> A large restore is a single enormous write set. If the dump is big enough to
+> exceed the cluster's `wsrep_max_ws_size`, restore it in chunks or have the
+> DBA restore it node-side instead.
 
 ---
 
@@ -637,14 +699,22 @@ sudo systemctl status woodshop-log
 # Recent application logs
 sudo journalctl -u woodshop-log --since "1 hour ago"
 
-# PostgreSQL status
-sudo systemctl status postgresql
+# Can we reach the cluster?
+mysql --defaults-file=/home/woodshop/.my.cnf -e "SELECT 1;"
 
 # Database size
-psql -U woodshop -h 127.0.0.1 woodshop_log -c "SELECT pg_size_pretty(pg_database_size('woodshop_log'));"
+mysql --defaults-file=/home/woodshop/.my.cnf -e "
+SELECT ROUND(SUM(data_length + index_length) / 1024 / 1024, 1) AS size_mb
+FROM information_schema.tables WHERE table_schema = 'octagon_log';"
 
-# Active database connections
-psql -U woodshop -h 127.0.0.1 woodshop_log -c "SELECT count(*) FROM pg_stat_activity WHERE datname='woodshop_log';"
+# Active connections from this app
+mysql --defaults-file=/home/woodshop/.my.cnf -e "
+SELECT COUNT(*) FROM information_schema.processlist WHERE db = 'octagon_log';"
+
+# Cluster health — size should equal the node count, status 'Primary'
+mysql --defaults-file=/home/woodshop/.my.cnf -e "
+SHOW STATUS WHERE Variable_name IN
+  ('wsrep_cluster_size','wsrep_cluster_status','wsrep_local_state_comment');"
 ```
 
 ### Log rotation
@@ -681,24 +751,76 @@ The `.env` file is missing or `SECRET_KEY` is not set. Verify:
 cat /home/woodshop/jubilant-happiness/.env | grep SECRET_KEY
 ```
 
-### "could not connect to server: Connection refused"
+### "No module named 'MySQLdb'"
 
-PostgreSQL is not running or the `DATABASE_URL` is wrong.
-
-```bash
-sudo systemctl status postgresql
-psql -U woodshop -d woodshop_log -h 127.0.0.1 -c "SELECT 1;"
-```
-
-### "FATAL: password authentication failed"
-
-The password in `DATABASE_URL` doesn't match what was set in PostgreSQL. Reset it:
+`DATABASE_URL` reached SQLAlchemy without the driver being rewritten — normally
+because something bypassed `config.py` and built the engine directly. Write the
+URL as `mysql+pymysql://...` explicitly, and confirm PyMySQL is installed:
 
 ```bash
-sudo -u postgres psql -c "ALTER USER woodshop WITH PASSWORD 'new_password_here';"
+python3 -c "import pymysql; print('PyMySQL OK')"
 ```
 
-Then update `DATABASE_URL` in `.env` and restart: `sudo systemctl restart woodshop-log`
+### "Can't connect to MySQL server on ... (110)" / connection refused
+
+The cluster is unreachable, the port is blocked, or `DATABASE_URL` points
+somewhere wrong.
+
+```bash
+nc -zv galera.its.appstate.edu 3306
+mysql -h galera.its.appstate.edu -u octagon -p octagon_log -e "SELECT 1;"
+```
+
+### "Access denied for user 'octagon'@'...'"
+
+Either the password in `DATABASE_URL` is wrong, or the grant does not cover the
+host the app is connecting *from* — MySQL grants are per user *and* host, so an
+app that moved to a new subnet or into containers will be denied even with the
+right password. Have the DBA confirm:
+
+```sql
+SELECT user, host FROM mysql.user WHERE user = 'octagon';
+SHOW GRANTS FOR 'octagon'@'%';
+```
+
+### "RSA public key is not available" on connect
+
+MySQL 8's default `caching_sha2_password` auth needs the `cryptography`
+package, which ships via the `PyMySQL[rsa]` extra in `requirements.txt`.
+Reinstall dependencies if it is missing: `pip install -r requirements.txt`.
+
+### "Incorrect string value: '\xF0\x9F...'" when saving a name or note
+
+The database or column is `utf8` (three-byte) rather than `utf8mb4`. Check and
+convert:
+
+```sql
+SELECT default_character_set_name FROM information_schema.schemata
+WHERE schema_name = 'octagon_log';
+
+ALTER DATABASE octagon_log CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+ALTER TABLE student CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+```
+
+### "Deadlock found when trying to get lock" (error 1213) under light load
+
+On Galera this is usually not a local deadlock but a certification failure —
+two nodes committed conflicting writes. Point `DATABASE_URL` at a single writer
+node or the load balancer's single-writer VIP rather than spreading writes
+across nodes.
+
+### A migration failed halfway
+
+MySQL commits DDL implicitly, so there is no transaction to roll back. Check
+what actually landed, then fix forward:
+
+```bash
+mysql --defaults-file=/home/woodshop/.my.cnf octagon_log -e "SHOW TABLES; SELECT * FROM alembic_version;"
+```
+
+If the schema changed but `alembic_version` did not advance, either finish the
+change by hand and `flask db stamp <revision>`, or restore from the pre-upgrade
+backup and retry.
 
 ### "502 Bad Gateway" from Nginx
 
@@ -714,22 +836,39 @@ curl http://127.0.0.1:8080     # test Gunicorn directly
 Check connection count and long-running queries:
 
 ```bash
-psql -U woodshop -h 127.0.0.1 woodshop_log -c "
-SELECT pid, now() - pg_stat_activity.query_start AS duration, query
-FROM pg_stat_activity
-WHERE datname = 'woodshop_log' AND state != 'idle'
-ORDER BY duration DESC;
+mysql --defaults-file=/home/woodshop/.my.cnf -e "
+SELECT id, time, state, LEFT(info, 120) AS query
+FROM information_schema.processlist
+WHERE db = 'octagon_log' AND command != 'Sleep'
+ORDER BY time DESC;
 "
+```
+
+If queries are fast but requests are slow, the bottleneck is more likely the
+pool than the cluster — check whether `DB_POOL_SIZE` + `DB_MAX_OVERFLOW` is
+being exhausted, and whether flow control is throttling writes:
+
+```bash
+mysql --defaults-file=/home/woodshop/.my.cnf -e "
+SHOW STATUS WHERE Variable_name IN
+  ('wsrep_flow_control_paused','wsrep_local_recv_queue_avg');"
 ```
 
 ### Need to reset everything and start fresh
 
+> This drops production data on every node in the cluster. Take a backup first.
+
 ```bash
 sudo systemctl stop woodshop-log
-sudo -u postgres psql -c "DROP DATABASE woodshop_log;"
-sudo -u postgres psql -c "CREATE DATABASE woodshop_log OWNER woodshop;"
+
+mysql --defaults-file=/home/woodshop/.my.cnf -e "
+DROP DATABASE octagon_log;
+CREATE DATABASE octagon_log CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+
 cd /home/woodshop/jubilant-happiness
 source venv/bin/activate
+export FLASK_APP=run.py
+flask db upgrade
 python seed_production.py
 sudo systemctl start woodshop-log
 ```
