@@ -517,6 +517,40 @@ class TestFacultyStudentManagement:
         assert b"New Student" in resp.data
         assert Student.query.filter_by(student_id="900777777").first() is not None
 
+    def test_add_student_rejects_malformed_banner_id(self, client, faculty_seed):
+        """Faculty must not be able to create a student who can't sign in.
+
+        The kiosk and monitor lookup both require exactly 9 digits, so an ID
+        that fails that check would strand the student at the shop bench.
+        """
+        faculty_login(client, "testfaculty", "pass")
+        for bad_id in ("12345", "NOT-A-NUMBER", "9001234567", "90088888a"):
+            resp = client.post(
+                "/faculty/students/add",
+                data={"student_id": bad_id, "display_name": "Broken Record"},
+                follow_redirects=True,
+            )
+            assert b"must be exactly 9 digits" in resp.data
+            assert Student.query.filter_by(student_id=bad_id).first() is None
+
+    def test_faculty_created_student_can_be_signed_in(self, client, faculty_seed, seed):
+        """The roster and the sign-in flows must agree on what a valid ID is."""
+        faculty_login(client, "testfaculty", "pass")
+        client.post(
+            "/faculty/students/add",
+            data={"student_id": "900777123", "display_name": "Signable Student"},
+            follow_redirects=True,
+        )
+        client.get("/faculty/logout")
+
+        login(client, "testmon", "pass")
+        client.post("/monitor/sign-in", data={"area_id": seed["area_id"]},
+                    follow_redirects=True)
+        resp = client.post(
+            "/kiosk/scan", data={"banner_id": "900777123"}, follow_redirects=True
+        )
+        assert b"must be exactly 9 digits" not in resp.data
+
     def test_add_duplicate_student(self, client, faculty_seed):
         faculty_login(client, "testfaculty", "pass")
         resp = client.post(
@@ -663,6 +697,53 @@ class TestFacultyCSVUpload:
         )
         assert b"1 student(s) added" in resp.data
         assert b"1 skipped" in resp.data
+
+    def test_csv_upload_rejects_malformed_banner_id(self, client, faculty_seed):
+        """A malformed ID must not reach the roster.
+
+        The sign-in flows require exactly 9 digits, so a student created with
+        anything else could never be signed in at the shop.
+        """
+        faculty_login(client, "testfaculty", "pass")
+        csv_content = (
+            "banner_id,name\n"
+            "12345,Too Short\n"
+            "NOT-A-NUMBER,Not Numeric\n"
+            "9001234567,Too Long\n"
+        )
+        import io
+        data = {"csv_file": (io.BytesIO(csv_content.encode("utf-8")), "students.csv")}
+        resp = client.post(
+            "/faculty/students/upload",
+            data=data,
+            content_type="multipart/form-data",
+            follow_redirects=True,
+        )
+        assert b"must be exactly 9 digits" in resp.data
+        for bad in ("12345", "NOT-A-NUMBER", "9001234567"):
+            assert Student.query.filter_by(student_id=bad).first() is None
+
+    def test_csv_upload_keeps_good_rows_when_one_is_bad(self, client, faculty_seed):
+        """One bad line should not discard the rest of a long roster."""
+        faculty_login(client, "testfaculty", "pass")
+        csv_content = (
+            "banner_id,name\n"
+            "900777001,Good One\n"
+            "bad-id,Bad One\n"
+            "900777002,Good Two\n"
+        )
+        import io
+        data = {"csv_file": (io.BytesIO(csv_content.encode("utf-8")), "students.csv")}
+        resp = client.post(
+            "/faculty/students/upload",
+            data=data,
+            content_type="multipart/form-data",
+            follow_redirects=True,
+        )
+        assert b"2 student(s) added" in resp.data
+        assert Student.query.filter_by(student_id="900777001").first() is not None
+        assert Student.query.filter_by(student_id="900777002").first() is not None
+        assert Student.query.filter_by(student_id="bad-id").first() is None
 
     def test_csv_upload_alt_columns(self, client, faculty_seed):
         faculty_login(client, "testfaculty", "pass")

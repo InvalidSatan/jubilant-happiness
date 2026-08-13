@@ -25,6 +25,7 @@ from app.models import (
     student_training,
     monitor_areas,
 )
+from app.utils import is_valid_banner_id
 
 faculty_bp = Blueprint("faculty", __name__)
 
@@ -166,6 +167,12 @@ def add_student():
             flash("Banner ID and name are required.", "danger")
             return render_template("faculty/add_student.html")
 
+        # The sign-in flows reject anything that isn't 9 digits, so a student
+        # created with a malformed ID could never actually be signed in.
+        if not is_valid_banner_id(banner_id):
+            flash("Banner ID must be exactly 9 digits.", "danger")
+            return render_template("faculty/add_student.html")
+
         if Student.query.filter_by(student_id=banner_id).first():
             flash(f"A student with Banner ID {banner_id} already exists.", "warning")
             return render_template("faculty/add_student.html")
@@ -208,9 +215,7 @@ def upload_students():
 
             reader.fieldnames = [h.strip().lower() for h in reader.fieldnames]
 
-            # Validate required columns
-            required_cols = {"banner_id", "name"}
-            # Also accept alternative column names
+            # Accept alternative column names for the required fields
             alt_mappings = {
                 "student_id": "banner_id",
                 "id": "banner_id",
@@ -221,22 +226,12 @@ def upload_students():
                 "canvas": "canvas_user_id",
             }
 
-            available = set(reader.fieldnames)
-            # Apply alternative mappings
             col_map = {}
             for col in reader.fieldnames:
                 if col in alt_mappings:
                     col_map[alt_mappings[col]] = col
                 else:
                     col_map[col] = col
-
-            if "banner_id" not in col_map and "name" not in col_map:
-                flash(
-                    "CSV must have columns: banner_id (or student_id), name (or display_name). "
-                    f"Found: {', '.join(reader.fieldnames)}",
-                    "danger",
-                )
-                return render_template("faculty/upload_students.html")
 
             banner_col = col_map.get("banner_id")
             name_col = col_map.get("name")
@@ -265,6 +260,14 @@ def upload_students():
 
                 if not banner_id or not name:
                     errors.append(f"Row {row_num}: missing banner_id or name")
+                    continue
+
+                # Reported per row rather than failing the whole file, so one
+                # bad line in a long roster doesn't discard the good ones.
+                if not is_valid_banner_id(banner_id):
+                    errors.append(
+                        f"Row {row_num}: Banner ID '{banner_id}' must be exactly 9 digits"
+                    )
                     continue
 
                 if Student.query.filter_by(student_id=banner_id).first():
