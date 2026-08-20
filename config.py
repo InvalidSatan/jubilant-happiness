@@ -84,6 +84,14 @@ class ProductionConfig(Config):
     # headers themselves are applied by ProxyFix in init_app below.
     PREFERRED_URL_SCHEME = "https"
 
+    # Authentication is session-cookie based. Production is always served
+    # through HTTPS, so prevent browsers from sending that cookie over plain
+    # HTTP, exposing it to JavaScript, or attaching it to most cross-site
+    # requests.
+    SESSION_COOKIE_SECURE = True
+    SESSION_COOKIE_HTTPONLY = True
+    SESSION_COOKIE_SAMESITE = "Lax"
+
     # How many reverse proxies sit in front of the app. Must be read here
     # rather than in init_app: Flask only loads uppercase attributes off the
     # config class, so a value looked up straight from app.config would never

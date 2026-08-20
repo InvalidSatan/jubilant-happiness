@@ -1217,6 +1217,13 @@ def _production_cfg(hops):
 
 
 class TestProxyHops:
+    def test_production_session_cookie_is_hardened(self):
+        app = create_app(_production_cfg(1))
+
+        assert app.config["SESSION_COOKIE_SECURE"] is True
+        assert app.config["SESSION_COOKIE_HTTPONLY"] is True
+        assert app.config["SESSION_COOKIE_SAMESITE"] == "Lax"
+
     def test_proxy_hops_is_read_from_the_environment(self, monkeypatch):
         """Regression: PROXY_HOPS must be loaded onto the config class.
 

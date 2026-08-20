@@ -881,7 +881,7 @@ sudo systemctl start woodshop-log
 
 Sections 2–9 describe the app running directly on a VM under systemd. This
 appendix is the alternative: the same app in a container, for hosting that
-expects an image rather than a host to configure. Sections 1 (why PostgreSQL),
+expects an image rather than a host to configure. Sections 1 (why MySQL Galera),
 3 (database setup), 11 (backups) and 13 (creating accounts) still apply — a
 container changes how the app is *started*, not what it needs.
 
@@ -919,7 +919,7 @@ docker run --env-file .env -p 8080:8080 octagon-log
 by `.dockerignore` and must be supplied at run time — never build secrets into
 an image layer, where anyone who can pull the image can read them back.
 
-`DATABASE_URL` must point at a PostgreSQL instance the container can reach.
+`DATABASE_URL` must point at the MySQL Galera endpoint the container can reach.
 `localhost` inside a container is the container itself, not the host, so a
 database running on the Docker host is reached at `host.docker.internal` (or
 the bridge gateway address) rather than `localhost`.

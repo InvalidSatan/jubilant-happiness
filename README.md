@@ -311,6 +311,43 @@ docker run --env-file .env -p 8080:8080 octagon-log
 
 Same app, same `.env`, same WSGI entry point — the image runs `gunicorn wsgi:app`. Migrations are not run at startup; apply them as a one-off with `docker run --rm --env-file .env octagon-log flask db upgrade`. [Appendix A of DEPLOYMENT.md](DEPLOYMENT.md#appendix-a--running-in-a-container) covers the details.
 
+### Move the repository to AppState hosting
+
+You do not need to re-clone, squash, or copy files, and the Git account used by
+the destination does not need to match the account that owns the current
+repository. Add the university repository as a second remote, push the full
+history, and keep the personal remote available as a backup:
+
+```bash
+git remote rename origin personal
+git remote add origin <appstate-repository-url>
+git push -u origin main
+
+# Create the deployment branch from the exact main revision you reviewed.
+git switch -c test main
+git push -u origin test
+git switch main
+```
+
+If this checkout has no `origin`, omit the `git remote rename` command. If
+`test` already exists on the university remote, fetch it and inspect its CI/CD
+files before merging rather than overwriting it:
+
+```bash
+git fetch origin
+git switch --track origin/test
+git merge main
+git push
+```
+
+Authenticate the university remote with the enterprise credentials requested
+by its URL (for example, an AppState personal access token over HTTPS). Git
+records author names and email addresses in commits, but those identities do
+not control permission to push; the credentials for the destination remote do.
+After the handoff, merge feature work into `test` for the test deployment and
+promote the reviewed `test` commit to `main` for production. Do not force-push
+either deployment branch once ITS has attached workflows to it.
+
 ### 4. Run Behind a Reverse Proxy (Recommended)
 
 ```nginx
@@ -500,7 +537,7 @@ pip install -r requirements-dev.txt
 python -m pytest tests/ -q
 ```
 
-The suite is **81 tests** covering:
+The suite is **96 tests** covering:
 
 - Authentication for both portals (login, logout, redirects, access control)
 - Banner ID validation
